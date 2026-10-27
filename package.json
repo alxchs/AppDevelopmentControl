@@ -1,0 +1,22 @@
+{
+  "name": "app-development-control",
+  "version": "1.0.0",
+  "description": "Executive Projects Dashboard & Control for Local LAN",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "scan": "node src/cli-scan.js",
+    "test": "node test/test_all.mjs"
+  },
+  "keywords": [
+    "dashboard",
+    "projects-management",
+    "executive-control",
+    "lan-dashboard",
+    "sdd-monitor"
+  ],
+  "author": "Alexandre",
+  "license": "ISC"
+}
+

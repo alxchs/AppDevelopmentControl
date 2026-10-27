@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AppDevelopmentControl — Executive Projects Dashboard</title>
+  <!-- Tailwind CSS CDN com fallback -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            slate: {
+              850: '#151f32',
+              900: '#0f172a',
+              950: '#090d16'
+            },
+            navy: {
+              800: '#1e293b',
+              900: '#0f172a',
+              950: '#0a0f1d'
+            },
+            emerald: {
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669'
+            },
+            amber: {
+              400: '#fbbf24',
+              500: '#f59e0b',
+              600: '#d97706'
+            },
+            indigo: {
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-indigo-600 selection:text-white">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/30 text-white font-bold">
+          <i data-lucide="layers" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-tight text-white">AppDevelopmentControl</h1>
+            <span class="text-xs bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full font-medium">Executive v1.0</span>
+          </div>
+          <p class="text-xs text-slate-400">Controle e Portfólio de Aplicações da Rede Local</p>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-3">
+        <button id="btn-export-notebooklm" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 hover:border-indigo-500/50 transition-all shadow-sm">
+          <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i>
+          <span>Briefing NotebookLM</span>
+        </button>
+
+        <button id="btn-add-project" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md shadow-indigo-600/20">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>Novo Projeto</span>
+        </button>
+
+        <button id="btn-rescan" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all">
+          <i data-lucide="refresh-cw" class="w-4 h-4 text-slate-400" id="rescan-icon"></i>
+          <span>Sincronizar</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 flex-1 w-full">
+
+    <!-- LAN Banner -->
+    <div id="lan-banner" class="bg-gradient-to-r from-slate-900 to-indigo-950/40 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+          <i data-lucide="wifi" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Acesso na Rede Local (LAN)</div>
+          <div class="text-sm font-medium text-slate-200 flex items-center gap-2">
+            <span>Disponível em:</span>
+            <code id="lan-primary-url" class="bg-slate-800 text-emerald-300 px-2.5 py-1 rounded-md text-xs font-mono font-semibold border border-slate-700">Carregando...</code>
+            <button id="btn-copy-lan" title="Copiar Link" class="text-slate-400 hover:text-white transition">
+              <i data-lucide="copy" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-xs text-slate-400">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span>Servidor Ativo em <code>0.0.0.0:3333</code></span>
+      </div>
+    </div>
+
+    <!-- Executive KPI Summary Cards -->
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4" id="kpi-cards">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="text-xs text-slate-400 font-medium">Projetos Únicos</div>
+        <div class="text-2xl font-bold text-white mt-1" id="kpi-total-projects">-</div>
+        <div class="text-[11px] text-indigo-400 mt-1 font-medium" id="kpi-total-worktrees">- worktrees vinculadas</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="text-xs text-slate-400 font-medium">Commits Totais</div>
+        <div class="text-2xl font-bold text-indigo-400 mt-1" id="kpi-total-commits">-</div>
+        <div class="text-[11px] text-slate-500 mt-1" id="kpi-commits-month">- últimos 30d</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="text-xs text-slate-400 font-medium">Commits Recentes</div>
+        <div class="text-2xl font-bold text-emerald-400 mt-1" id="kpi-commits-week">-</div>
+        <div class="text-[11px] text-slate-500 mt-1" id="kpi-commits-24h">- nas últimas 24h</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="text-xs text-slate-400 font-medium">Specs Criadas (SDD)</div>
+        <div class="text-2xl font-bold text-white mt-1" id="kpi-total-specs">-</div>
+        <div class="text-[11px] text-slate-500 mt-1">Metodologia ativa</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="text-xs text-slate-400 font-medium">Specs Desenvolvidas</div>
+        <div class="text-2xl font-bold text-emerald-400 mt-1" id="kpi-done-specs">-</div>
+        <div class="text-[11px] text-emerald-500/80 font-medium mt-1" id="kpi-specs-rate">-% concluídas</div>
+      </div>
+
+      <div class="bg-slate-900 border border-amber-500/30 bg-amber-500/5 rounded-xl p-4">
+        <div class="text-xs text-amber-300 font-medium flex items-center justify-between">
+          <span>Ações Alexandre</span>
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+        </div>
+        <div class="text-2xl font-bold text-amber-400 mt-1" id="kpi-alexandre-actions">-</div>
+        <div class="text-[11px] text-amber-300/80 font-medium mt-1">Exigem atenção</div>
+      </div>
+    </section>
+
+    <!-- Critical Section: Pendências e Decisões do Alexandre -->
+    <section id="alexandre-panel" class="bg-slate-900 border border-amber-500/40 rounded-xl overflow-hidden shadow-lg shadow-amber-950/20">
+      <div class="bg-gradient-to-r from-amber-500/15 via-slate-900 to-slate-900 px-5 py-3.5 border-b border-amber-500/20 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+            <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-amber-200">Painel de Decisões e Pendências do Alexandre</h2>
+            <p class="text-xs text-amber-300/70">Itens com <code>PENDING DECISION</code> ou bloqueios aguardando deliberação</p>
+          </div>
+        </div>
+        <span id="alexandre-count-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">0 Pendências</span>
+      </div>
+
+      <div class="p-4 divide-y divide-slate-800 max-h-64 overflow-y-auto" id="alexandre-actions-list">
+        <!-- Renderizado dinamicamente -->
+      </div>
+    </section>
+
+    <!-- Visual Charts & Analytics -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="text-sm font-bold text-slate-200">Top 10 Projetos por Atividade Recente (Últimos 30 Dias)</h3>
+            <p class="text-xs text-slate-400">Volume de commits e cadência de entregas</p>
+          </div>
+          <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-md">Commits</span>
+        </div>
+        <div class="h-60">
+          <canvas id="chart-activity"></canvas>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-sm font-bold text-slate-200">Maturidade de Specs (SDD)</h3>
+              <p class="text-xs text-slate-400">Proporção de desenvolvimento</p>
+            </div>
+            <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400"></i>
+          </div>
+          <div class="h-48 relative flex items-center justify-center">
+            <canvas id="chart-specs"></canvas>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-4 border-t border-slate-800 text-center text-xs">
+          <div>
+            <span class="text-emerald-400 font-bold block text-base" id="chart-done-val">0</span>
+            <span class="text-slate-400">Desenvolvidas</span>
+          </div>
+          <div>
+            <span class="text-amber-400 font-bold block text-base" id="chart-pending-val">0</span>
+            <span class="text-slate-400">Pendentes</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Search & Filter Controls -->
+    <section class="space-y-4">
+      <div class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        <!-- Intelligent Search Bar -->
+        <div class="relative flex-1">
+          <i data-lucide="search" class="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Busca inteligente local: digite nome, propósito, tecnologia, spec ou pendência (zero tokens)..."
+            class="w-full pl-11 pr-10 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all shadow-inner"
+          />
+          <button id="btn-clear-search" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Filter Chips -->
+        <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0" id="filter-chips">
+          <button data-filter="all" class="filter-chip active px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition">Todos</button>
+          <button data-filter="active" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 transition">Ativos (30d)</button>
+          <button data-filter="alexandre" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-amber-300 border border-amber-500/30 hover:bg-amber-500/10 transition">Pendente Alexandre</button>
+          <button data-filter="specs" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 transition">Com Specs SDD</button>
+          <button data-filter="with-worktrees" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/10 transition">Com Worktrees</button>
+        </div>
+      </div>
+
+      <!-- Result Counter -->
+      <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+        <div>Exibindo <span id="filtered-count" class="font-bold text-slate-200">0</span> de <span id="total-count" class="font-bold text-slate-200">0</span> projetos</div>
+        <div class="flex items-center gap-3">
+          <span>Ordenar por:</span>
+          <select id="sort-select" class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-indigo-500">
+            <option value="activity">Atividade Recente (30d)</option>
+            <option value="name">Nome (A-Z)</option>
+            <option value="commits">Total de Commits</option>
+            <option value="specs">Total de Specs</option>
+            <option value="inactive">Maior Inatividade</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- Projects Grid -->
+    <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="projects-grid">
+      <!-- Cards renderizados dinamicamente -->
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-slate-900 border-t border-slate-800 py-4 mt-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+      <div>AppDevelopmentControl &bull; Arquitetura Autocontida na Rede Local &bull; Sem consumo de tokens</div>
+      <div class="flex items-center gap-4">
+        <span>SQLite WAL</span>
+        <span>Node.js v24</span>
+        <span>Google NotebookLM Ready</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modal: Detalhes do Projeto -->
+  <div id="modal-project" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-850">
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 id="modal-title" class="text-lg font-bold text-white">-</h3>
+            <span id="modal-type-badge" class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-800 text-slate-300">-</span>
+          </div>
+          <p id="modal-path" class="text-xs font-mono text-slate-400 mt-0.5">-</p>
+        </div>
+        <button id="modal-close" class="text-slate-400 hover:text-white p-2">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-6 flex-1 text-sm">
+        <!-- Propósito Editável -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Propósito da Aplicação</label>
+            <span id="modal-purpose-source" class="text-[11px] text-slate-500"></span>
+          </div>
+          <div class="flex gap-2">
+            <textarea id="modal-purpose-input" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 text-sm focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+          <div class="flex justify-end mt-2">
+            <button id="modal-save-purpose" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition">Salvar Propósito</button>
+          </div>
+        </div>
+
+        <!-- Métricas Rápidas -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950 p-4 rounded-xl border border-slate-800">
+          <div>
+            <span class="text-xs text-slate-500 block">Início no PC</span>
+            <span id="modal-init-local" class="text-xs font-semibold text-slate-200">-</span>
+          </div>
+          <div>
+            <span class="text-xs text-slate-500 block">Início no GitHub</span>
+            <span id="modal-init-github" class="text-xs font-semibold text-slate-200">-</span>
+          </div>
+          <div>
+            <span class="text-xs text-slate-500 block">Inatividade Máxima</span>
+            <span id="modal-inactive-max" class="text-xs font-semibold text-slate-200">-</span>
+          </div>
+          <div>
+            <span class="text-xs text-slate-500 block">Sem alteração há</span>
+            <span id="modal-inactive-current" class="text-xs font-semibold text-slate-200">-</span>
+          </div>
+        </div>
+
+        <!-- Worktrees Vinculadas -->
+        <div id="modal-worktrees-box" class="hidden">
+          <h4 class="text-xs font-semibold text-indigo-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <i data-lucide="git-branch" class="w-4 h-4 text-indigo-400"></i>
+              <span>Worktrees / Ambientes de Trabalho Vinculados (<span id="modal-worktrees-count">0</span>)</span>
+            </span>
+            <span class="text-[11px] text-slate-400">Mesmo projeto em pastas separadas</span>
+          </h4>
+          <div id="modal-worktrees-list" class="space-y-1.5 bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <!-- Worktrees renderizadas dinamicamente -->
+          </div>
+        </div>
+
+        <!-- Specs SDD -->
+        <div>
+          <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span>Especificações de SDD (<span id="modal-specs-count">0</span>)</span>
+            <span class="text-[11px] text-slate-400">docs/specs/</span>
+          </h4>
+          <div id="modal-specs-list" class="space-y-2 max-h-48 overflow-y-auto">
+            <!-- Specs renderizadas dinamicamente -->
+          </div>
+        </div>
+
+        <!-- Ações do Alexandre deste Projeto -->
+        <div id="modal-alexandre-box">
+          <h4 class="text-xs font-semibold text-amber-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400"></i>
+            <span>Itens Pendentes do Alexandre (<span id="modal-alexandre-count">0</span>)</span>
+          </h4>
+          <div id="modal-alexandre-list" class="space-y-2 bg-amber-500/5 border border-amber-500/20 rounded-xl p-3">
+            <!-- Ações renderizadas -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Adicionar Novo Projeto / Pasta -->
+  <div id="modal-add-project" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-850">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="folder-plus" class="w-5 h-5 text-indigo-400"></i>
+          <span>Adicionar Novo Projeto / Monitorar Pasta</span>
+        </h3>
+        <button id="modal-add-close" class="text-slate-400 hover:text-white p-2">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4 text-sm">
+        <p class="text-xs text-slate-400">
+          Novos projetos criados dentro de <code>c:\desenv\utils</code> são descobertos automaticamente na varredura. Caso queira registrar manualmente um projeto ou apontar uma pasta externa, informe abaixo:
+        </p>
+
+        <div>
+          <label class="text-xs font-semibold text-slate-300 block mb-1">Caminho da Pasta</label>
+          <input type="text" id="add-project-path" placeholder="Ex: c:\desenv\utils\NovoApp ou d:\projetos\App" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 text-sm focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-slate-300 block mb-1">Nome de Exibição (Opcional)</label>
+          <input type="text" id="add-project-label" placeholder="Deixe em branco para usar o nome da pasta" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 text-sm focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div id="add-project-error" class="hidden text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg"></div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button id="btn-cancel-add" class="px-4 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white">Cancelar</button>
+          <button id="btn-submit-add" class="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center gap-2">
+            <span>Catalogar Projeto</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
