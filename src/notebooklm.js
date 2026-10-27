@@ -22,6 +22,20 @@ export function generateNotebookLmDoc(db) {
   md += `- **Maturidade de Specs (SDD)**: ${kpis.doneSpecs} Desenvolvidas / ${kpis.totalSpecs} Totais (${Math.round((kpis.doneSpecs / (kpis.totalSpecs || 1)) * 100)}% concluídas)\n`;
   md += `- **Ações/Decisões Pendentes do Alexandre**: ${kpis.alexandreActionsCount} pontos críticos de atenção\n\n`;
 
+  // Resumo de Saúde
+  const activeCount = projects.filter(p => p.health_status === 'active').length;
+  const blockedCount = projects.filter(p => p.health_status === 'blocked').length;
+  const stableCount = projects.filter(p => p.health_status === 'stable').length;
+  const staleCount = projects.filter(p => p.health_status === 'stale').length;
+  const incubatingCount = projects.filter(p => p.health_status === 'incubating').length;
+
+  md += `### Diagnóstico de Farol de Saúde (Health Status):\n`;
+  md += `- 🟢 **Em Tração**: ${activeCount} projetos ativos\n`;
+  md += `- 🟡 **Bloqueados / Atenção Alexandre**: ${blockedCount} projetos com decisões abertas\n`;
+  md += `- ⚪ **Estáveis / Concluídos em Produção**: ${stableCount} ferramentas finalizadas\n`;
+  md += `- ⚠️ **Em Risco / Dormentes**: ${staleCount} projetos parados com pendências\n`;
+  md += `- 🟣 **Em Incubação**: ${incubatingCount} projetos embrionários\n\n`;
+
   md += `## 2. Pontos de Atenção Crítica: Decisões e Pendências do Alexandre\n\n`;
   md += `Abaixo estão listadas todas as decisões pendentes (\`PENDING DECISION\`), bloqueios ou itens aguardando deliberação direta do Alexandre nas specs:\n\n`;
 
@@ -55,6 +69,10 @@ export function generateNotebookLmDoc(db) {
     const initGh = p.created_github ? p.created_github.slice(0, 10) : (p.github_url ? 'GitHub configurado' : 'Sem GitHub');
 
     md += `### ${p.name}\n\n`;
+    md += `- **Saúde Gerencial**: ${p.health_status ? p.health_status.toUpperCase() : 'N/A'}${p.health_reason ? ` (${p.health_reason})` : ''}\n`;
+    md += `- **Maturidade SDD**: **${p.sdd_score || 0}%** de aderência metodológica\n`;
+    if (p.last_tag) md += `- **Última Tag de Checkpoint/Release**: \`${p.last_tag}\`${p.last_tag_date ? ` (${p.last_tag_date.slice(0, 10)})` : ''}\n`;
+    if (p.last_agent) md += `- **Última Atuação Registrada**: ${p.last_agent}\n`;
     md += `- **Propósito da Aplicação**: ${p.purpose}\n`;
     md += `- **Início no Computador**: ${initLocal}\n`;
     md += `- **Início no GitHub**: ${initGh}\n`;

@@ -61,6 +61,12 @@ export class AppDb {
         pending_specs INTEGER DEFAULT 0,
         alexandre_pending_count INTEGER DEFAULT 0,
         worktrees_count INTEGER DEFAULT 0,
+        health_status TEXT DEFAULT 'incubating',
+        health_reason TEXT,
+        sdd_score INTEGER DEFAULT 0,
+        last_tag TEXT,
+        last_tag_date TEXT,
+        last_agent TEXT,
         last_scanned_at TEXT,
         is_custom INTEGER DEFAULT 0
       );
@@ -121,6 +127,12 @@ export class AppDb {
     try { this.db.exec('ALTER TABLE projects ADD COLUMN worktrees_count INTEGER DEFAULT 0'); } catch (e) {}
     try { this.db.exec('ALTER TABLE project_specs ADD COLUMN source_worktree TEXT'); } catch (e) {}
     try { this.db.exec('ALTER TABLE alexandre_actions ADD COLUMN source_worktree TEXT'); } catch (e) {}
+    try { this.db.exec("ALTER TABLE projects ADD COLUMN health_status TEXT DEFAULT 'incubating'"); } catch (e) {}
+    try { this.db.exec('ALTER TABLE projects ADD COLUMN health_reason TEXT'); } catch (e) {}
+    try { this.db.exec('ALTER TABLE projects ADD COLUMN sdd_score INTEGER DEFAULT 0'); } catch (e) {}
+    try { this.db.exec('ALTER TABLE projects ADD COLUMN last_tag TEXT'); } catch (e) {}
+    try { this.db.exec('ALTER TABLE projects ADD COLUMN last_tag_date TEXT'); } catch (e) {}
+    try { this.db.exec('ALTER TABLE projects ADD COLUMN last_agent TEXT'); } catch (e) {}
   }
 
   clearNonCanonicalProjects(canonicalNames) {
@@ -148,7 +160,9 @@ export class AppDb {
         max_inactive_days, days_since_last_change,
         last_commit_date, last_commit_message,
         total_specs, done_specs, pending_specs,
-        alexandre_pending_count, worktrees_count, last_scanned_at, is_custom
+        alexandre_pending_count, worktrees_count,
+        health_status, health_reason, sdd_score, last_tag, last_tag_date, last_agent,
+        last_scanned_at, is_custom
       ) VALUES (
         @name, @path, @type, @purpose, @purpose_source, @has_git,
         @created_local, @created_github, @github_url,
@@ -156,7 +170,9 @@ export class AppDb {
         @max_inactive_days, @days_since_last_change,
         @last_commit_date, @last_commit_message,
         @total_specs, @done_specs, @pending_specs,
-        @alexandre_pending_count, @worktrees_count, @last_scanned_at, @is_custom
+        @alexandre_pending_count, @worktrees_count,
+        @health_status, @health_reason, @sdd_score, @last_tag, @last_tag_date, @last_agent,
+        @last_scanned_at, @is_custom
       )
       ON CONFLICT(name) DO UPDATE SET
         path = excluded.path,
@@ -180,6 +196,12 @@ export class AppDb {
         pending_specs = excluded.pending_specs,
         alexandre_pending_count = excluded.alexandre_pending_count,
         worktrees_count = excluded.worktrees_count,
+        health_status = excluded.health_status,
+        health_reason = excluded.health_reason,
+        sdd_score = excluded.sdd_score,
+        last_tag = excluded.last_tag,
+        last_tag_date = excluded.last_tag_date,
+        last_agent = excluded.last_agent,
         last_scanned_at = excluded.last_scanned_at,
         is_custom = excluded.is_custom
     `);
@@ -207,6 +229,12 @@ export class AppDb {
       pending_specs: p.pending_specs || 0,
       alexandre_pending_count: p.alexandre_pending_count || 0,
       worktrees_count: p.worktrees_count || 0,
+      health_status: p.health_status || 'incubating',
+      health_reason: p.health_reason || null,
+      sdd_score: p.sdd_score || 0,
+      last_tag: p.last_tag || null,
+      last_tag_date: p.last_tag_date || null,
+      last_agent: p.last_agent || null,
       last_scanned_at: new Date().toISOString(),
       is_custom: p.is_custom ? 1 : 0
     });

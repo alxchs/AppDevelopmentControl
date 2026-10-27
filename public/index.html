@@ -235,10 +235,11 @@
         <!-- Filter Chips -->
         <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0" id="filter-chips">
           <button data-filter="all" class="filter-chip active px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition">Todos</button>
-          <button data-filter="active" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 transition">Ativos (30d)</button>
-          <button data-filter="alexandre" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-amber-300 border border-amber-500/30 hover:bg-amber-500/10 transition">Pendente Alexandre</button>
-          <button data-filter="specs" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 transition">Com Specs SDD</button>
-          <button data-filter="with-worktrees" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/10 transition">Com Worktrees</button>
+          <button data-filter="health-active" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/10 transition">🟢 Em Tração</button>
+          <button data-filter="health-blocked" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-amber-300 border border-amber-500/30 hover:bg-amber-500/10 transition">🟡 Bloqueados</button>
+          <button data-filter="health-stable" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-slate-300 border border-slate-700 hover:bg-slate-800 transition">⚪ Estáveis</button>
+          <button data-filter="health-incubating" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/10 transition">🟣 Em Incubação</button>
+          <button data-filter="with-worktrees" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 transition">Com Worktrees</button>
         </div>
       </div>
 
@@ -249,6 +250,7 @@
           <span>Ordenar por:</span>
           <select id="sort-select" class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-indigo-500">
             <option value="activity">Atividade Recente (30d)</option>
+            <option value="sdd_score">Maturidade SDD Score</option>
             <option value="name">Nome (A-Z)</option>
             <option value="commits">Total de Commits</option>
             <option value="specs">Total de Specs</option>
@@ -305,6 +307,31 @@
           </div>
           <div class="flex justify-end mt-2">
             <button id="modal-save-purpose" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition">Salvar Propósito</button>
+          </div>
+        </div>
+
+        <!-- Diagnóstico de Saúde e SDD Score -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 p-4 rounded-xl border border-slate-800">
+          <div>
+            <span class="text-xs text-slate-400 block mb-1">Farol de Saúde Gerencial</span>
+            <div class="flex items-center gap-2">
+              <span id="modal-health-badge" class="px-2.5 py-1 rounded-lg text-xs font-bold">-</span>
+              <span id="modal-last-agent" class="text-[11px] text-slate-400"></span>
+            </div>
+            <p id="modal-health-reason" class="text-[11px] text-slate-400 mt-1 italic">-</p>
+          </div>
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="text-slate-400">Maturidade Metodológica (SDD)</span>
+              <strong id="modal-sdd-score-val" class="text-indigo-400 font-bold text-sm">0%</strong>
+            </div>
+            <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800">
+              <div id="modal-sdd-bar" class="bg-indigo-500 h-full rounded-full transition-all" style="width: 0%"></div>
+            </div>
+            <div class="flex items-center justify-between text-[11px] text-slate-500 mt-1">
+              <span id="modal-last-tag">Tag: Nenhuma</span>
+              <span id="modal-tag-date"></span>
+            </div>
           </div>
         </div>
 

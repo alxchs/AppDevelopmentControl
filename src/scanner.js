@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { computeHealthStatus, computeSddMaturityScore } from './evaluator.js';
 
 const GIT_ENV = {
   ...process.env,
@@ -208,6 +209,9 @@ export class ProjectScanner {
         days_since_last_change: gitMetrics.days_since_last_change,
         last_commit_date: gitMetrics.last_commit_date,
         last_commit_message: gitMetrics.last_commit_message,
+        last_tag: gitMetrics.last_tag || null,
+        last_tag_date: gitMetrics.last_tag_date || null,
+        last_agent: gitMetrics.last_agent || null,
         total_specs: totalSpecs,
         done_specs: doneSpecs,
         pending_specs: pendingSpecs,
@@ -215,6 +219,14 @@ export class ProjectScanner {
         worktrees_count: enrichedWorktrees.length,
         is_custom: isCustom
       };
+
+      // Avaliação de Saúde e Maturidade SDD
+      const health = computeHealthStatus(projectRecord);
+      const maturity = computeSddMaturityScore(projectRecord);
+
+      projectRecord.health_status = health.status;
+      projectRecord.health_reason = health.reason;
+      projectRecord.sdd_score = maturity.score;
 
       // Persistir no SQLite
       this.db.upsertProject(projectRecord);
@@ -295,7 +307,10 @@ export class ProjectScanner {
       max_inactive_days: 0,
       days_since_last_change: 0,
       last_commit_date: null,
-      last_commit_message: null
+      last_commit_message: null,
+      last_tag: null,
+      last_tag_date: null,
+      last_agent: null
     };
 
     try {
@@ -307,6 +322,59 @@ export class ProjectScanner {
           stdio: ['ignore', 'pipe', 'ignore']
         }).trim();
         if (remote) metrics.github_url = remote;
+      } catch (e) {}
+
+      // Tags
+      try {
+        const tag = execSync('git describe --tags --abbrev=0', {
+          cwd: projectPath,
+          encoding: 'utf8',
+          env: GIT_ENV,
+          stdio: ['ignore', 'pipe', 'ignore']
+        }).trim();
+        if (tag) {
+          metrics.last_tag = tag;
+          try {
+            const tagDate = execSync(`git log -1 --format=%aI ${tag}`, {
+              cwd: projectPath,
+              encoding: 'utf8',
+              env: GIT_ENV,
+              stdio: ['ignore', 'pipe', 'ignore']
+            }).trim();
+            if (tagDate) metrics.last_tag_date = tagDate;
+          } catch (e) {}
+        }
+      } catch (e) {
+        try {
+          const tagList = execSync('git tag --sort=-creatordate', {
+            cwd: projectPath,
+            encoding: 'utf8',
+            env: GIT_ENV,
+            stdio: ['ignore', 'pipe', 'ignore']
+          }).trim().split('\n').filter(t => t.trim());
+          if (tagList.length > 0) {
+            metrics.last_tag = tagList[0].trim();
+          }
+        } catch (err) {}
+      }
+
+      // Último agente / autor relevante
+      try {
+        const recentAuthors = execSync('git log -n 5 --format="%an %s"', {
+          cwd: projectPath,
+          encoding: 'utf8',
+          env: GIT_ENV,
+          stdio: ['ignore', 'pipe', 'ignore']
+        });
+        if (/claude/i.test(recentAuthors)) {
+          metrics.last_agent = 'Claude Code';
+        } else if (/antigravity|agy/i.test(recentAuthors)) {
+          metrics.last_agent = 'Antigravity';
+        } else if (/alexandre|alxch/i.test(recentAuthors)) {
+          metrics.last_agent = 'Alexandre';
+        } else {
+          metrics.last_agent = 'Desenvolvedor';
+        }
       } catch (e) {}
 
       try {

@@ -1,4 +1,4 @@
-// AppDevelopmentControl - Executive Frontend Logic (Canonical Multi-Worktree Architecture)
+// AppDevelopmentControl - Executive Frontend Logic (Canonical + Health & SDD Direction Engine)
 
 let allProjects = [];
 let allAlexandreActions = [];
@@ -166,7 +166,7 @@ function renderAlexandrePanel(actions) {
   container.innerHTML = actions.map(a => `
     <div class="py-2.5 flex items-start justify-between gap-4">
       <div class="space-y-0.5">
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
           <span class="text-xs font-bold text-slate-200 cursor-pointer hover:text-indigo-400 transition" onclick="openProjectModal('${escapeHtml(a.project_name)}')">
             ${escapeHtml(a.project_name)}
           </span>
@@ -186,7 +186,6 @@ function renderAlexandrePanel(actions) {
 }
 
 function renderCharts(projects, kpis) {
-  // 1. Gráfico de Atividade Recente (Top 10)
   const sorted = [...projects].sort((a, b) => b.changes_30d - a.changes_30d).slice(0, 10);
   const labels = sorted.map(p => p.name.length > 15 ? p.name.slice(0, 14) + '…' : p.name);
   const data30d = sorted.map(p => p.changes_30d);
@@ -235,7 +234,6 @@ function renderCharts(projects, kpis) {
     }
   });
 
-  // 2. Gráfico de Specs SDD (Donut)
   const ctxSpecs = document.getElementById('chart-specs').getContext('2d');
   if (specsChart) specsChart.destroy();
 
@@ -272,6 +270,9 @@ function intelligentSearch(query, list) {
     const nameLower = (item.name || '').toLowerCase();
     const purposeLower = (item.purpose || '').toLowerCase();
     const pathLower = (item.path || '').toLowerCase();
+    const healthLower = (item.health_status || '').toLowerCase();
+    const tagLower = (item.last_tag || '').toLowerCase();
+    const agentLower = (item.last_agent || '').toLowerCase();
     const worktreesLower = (item.worktrees || []).map(w => w.name.toLowerCase()).join(' ');
 
     for (const term of terms) {
@@ -282,6 +283,9 @@ function intelligentSearch(query, list) {
       if (purposeLower.includes(term)) score += 10;
       if (pathLower.includes(term)) score += 5;
       if (worktreesLower.includes(term)) score += 15;
+      if (healthLower.includes(term)) score += 25;
+      if (tagLower.includes(term)) score += 20;
+      if (agentLower.includes(term)) score += 15;
 
       if (term === 'alexandre' && item.alexandre_pending_count > 0) score += 40;
 
@@ -323,13 +327,15 @@ function applyFilterAndRender() {
     filtered = intelligentSearch(query, filtered);
   }
 
-  // 2. Filtro rápido
-  if (currentFilter === 'active') {
-    filtered = filtered.filter(p => p.changes_30d > 0);
-  } else if (currentFilter === 'alexandre') {
-    filtered = filtered.filter(p => p.alexandre_pending_count > 0);
-  } else if (currentFilter === 'specs') {
-    filtered = filtered.filter(p => p.total_specs > 0);
+  // 2. Filtro rápido de Saúde e Direção
+  if (currentFilter === 'health-active') {
+    filtered = filtered.filter(p => p.health_status === 'active');
+  } else if (currentFilter === 'health-blocked') {
+    filtered = filtered.filter(p => p.health_status === 'blocked');
+  } else if (currentFilter === 'health-stable') {
+    filtered = filtered.filter(p => p.health_status === 'stable');
+  } else if (currentFilter === 'health-incubating') {
+    filtered = filtered.filter(p => p.health_status === 'incubating');
   } else if (currentFilter === 'with-worktrees') {
     filtered = filtered.filter(p => p.worktrees && p.worktrees.length > 0);
   }
@@ -337,6 +343,8 @@ function applyFilterAndRender() {
   // 3. Ordenação
   if (currentSort === 'activity') {
     filtered.sort((a, b) => b.changes_30d - a.changes_30d || b.changes_7d - a.changes_7d);
+  } else if (currentSort === 'sdd_score') {
+    filtered.sort((a, b) => (b.sdd_score || 0) - (a.sdd_score || 0));
   } else if (currentSort === 'name') {
     filtered.sort((a, b) => a.name.localeCompare(b.name));
   } else if (currentSort === 'commits') {
@@ -354,6 +362,40 @@ function applyFilterAndRender() {
   lucide.createIcons();
 }
 
+function getHealthBadge(status, reason) {
+  switch (status) {
+    case 'active':
+      return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" title="${escapeHtml(reason || '')}">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>EM TRAÇÃO</span>
+      </span>`;
+    case 'blocked':
+      return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30" title="${escapeHtml(reason || '')}">
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+        <span>BLOQUEADO</span>
+      </span>`;
+    case 'stable':
+      return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700" title="${escapeHtml(reason || '')}">
+        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+        <span>ESTÁVEL</span>
+      </span>`;
+    case 'stale':
+      return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20" title="${escapeHtml(reason || '')}">
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+        <span>EM RISCO</span>
+      </span>`;
+    case 'incubating':
+      return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30" title="${escapeHtml(reason || '')}">
+        <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+        <span>INCUBAÇÃO</span>
+      </span>`;
+    default:
+      return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+        <span>PAUSADO</span>
+      </span>`;
+  }
+}
+
 function renderProjectsGrid(projects) {
   const grid = document.getElementById('projects-grid');
   if (projects.length === 0) {
@@ -368,26 +410,36 @@ function renderProjectsGrid(projects) {
   }
 
   grid.innerHTML = projects.map(p => {
-    // Badges de status e worktrees
+    const healthBadge = getHealthBadge(p.health_status, p.health_reason);
+
+    // Badges de worktree
     const worktreeCount = p.worktrees ? p.worktrees.length : 0;
     const worktreeBadge = worktreeCount > 0 ? `
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/25" title="${worktreeCount} pastas de trabalho/worktrees associadas">
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/25" title="${worktreeCount} pastas de trabalho vinculadas">
         <i data-lucide="git-branch" class="w-3 h-3"></i>
-        <span>${worktreeCount} worktree${worktreeCount > 1 ? 's' : ''}</span>
+        <span>${worktreeCount} wt</span>
       </span>
     ` : '';
 
-    const gitBadge = !p.has_git ? `
-      <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">Sem Git</span>
+    // Tag
+    const tagBadge = p.last_tag ? `
+      <span class="inline-flex items-center gap-1 text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 truncate max-w-[150px]" title="Última tag: ${escapeHtml(p.last_tag)}">
+        <i data-lucide="tag" class="w-3 h-3 text-slate-500"></i>
+        <span>${escapeHtml(p.last_tag)}</span>
+      </span>
     ` : '';
 
     // Alerta do Alexandre
     const alexandreBadge = p.alexandre_pending_count > 0 ? `
-      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold">
-        <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-amber-400"></i>
-        <span>${p.alexandre_pending_count} Ação do Alexandre</span>
+      <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-bold">
+        <i data-lucide="alert-triangle" class="w-3 h-3 text-amber-400"></i>
+        <span>${p.alexandre_pending_count} Ação</span>
       </div>
     ` : '';
+
+    // Barra de SDD Score
+    const sddScore = p.sdd_score || 0;
+    const sddColor = sddScore >= 70 ? 'bg-emerald-500' : (sddScore >= 40 ? 'bg-indigo-500' : 'bg-amber-500');
 
     // Barra de specs
     let specsBar = '';
@@ -420,25 +472,31 @@ function renderProjectsGrid(projects) {
         <div>
           <!-- Header do Card -->
           <div class="flex items-start justify-between gap-2 mb-2">
-            <div>
-              <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="font-bold text-base text-white group-hover:text-indigo-300 transition cursor-pointer" onclick="openProjectModal('${escapeHtml(p.name)}')">
-                  ${escapeHtml(p.name)}
-                </h3>
-                ${worktreeBadge}
-                ${gitBadge}
-              </div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              ${healthBadge}
+              ${worktreeBadge}
+              ${tagBadge}
             </div>
             ${alexandreBadge}
           </div>
 
+          <!-- Título e SDD Score -->
+          <div class="flex items-center justify-between gap-2 mt-1">
+            <h3 class="font-bold text-base text-white group-hover:text-indigo-300 transition cursor-pointer" onclick="openProjectModal('${escapeHtml(p.name)}')">
+              ${escapeHtml(p.name)}
+            </h3>
+            <span class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300" title="SDD Maturity Score: ${sddScore}%">
+              SDD <strong class="${sddScore >= 70 ? 'text-emerald-400' : (sddScore >= 40 ? 'text-indigo-300' : 'text-amber-300')}">${sddScore}%</strong>
+            </span>
+          </div>
+
           <!-- Propósito -->
-          <p class="text-xs text-slate-300 line-clamp-2 min-h-[32px] mt-1 leading-relaxed">
+          <p class="text-xs text-slate-300 line-clamp-2 min-h-[32px] mt-2 leading-relaxed">
             ${escapeHtml(p.purpose)}
           </p>
 
           <!-- Datas de Início -->
-          <div class="grid grid-cols-2 gap-2 mt-4 text-[11px] bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/60">
+          <div class="grid grid-cols-2 gap-2 mt-3 text-[11px] bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/60">
             <div>
               <span class="text-slate-500 block">Início no PC</span>
               <span class="text-slate-300 font-medium font-mono">${initLocal}</span>
@@ -471,8 +529,8 @@ function renderProjectsGrid(projects) {
 
           <!-- Inatividade -->
           <div class="flex items-center justify-between text-[11px] text-slate-400 mt-3 px-1">
-            <span>Maior hiato histórico: <strong class="text-slate-300">${p.max_inactive_days}d</strong></span>
-            <span>Sem alteração há: <strong class="${p.days_since_last_change > 30 ? 'text-amber-400' : 'text-slate-300'}">${p.days_since_last_change}d</strong></span>
+            <span>Hiato máx: <strong class="text-slate-300">${p.max_inactive_days}d</strong></span>
+            <span>Sem alteração: <strong class="${p.days_since_last_change > 30 ? 'text-amber-400' : 'text-slate-300'}">${p.days_since_last_change}d</strong></span>
           </div>
 
           <!-- Specs -->
@@ -504,6 +562,18 @@ async function openProjectModal(projectName) {
     document.getElementById('modal-path').innerText = p.path;
     document.getElementById('modal-purpose-input').value = p.purpose;
     document.getElementById('modal-purpose-source').innerText = p.purpose_source ? `Fonte: ${p.purpose_source}` : '';
+
+    // Farol de Saúde e SDD Score no Modal
+    const badgeHtml = getHealthBadge(p.health_status, p.health_reason);
+    document.getElementById('modal-health-badge').outerHTML = `<span id="modal-health-badge">${badgeHtml}</span>`;
+    document.getElementById('modal-health-reason').innerText = p.health_reason || 'Status computado automaticamente';
+    document.getElementById('modal-last-agent').innerText = p.last_agent ? `Último autor: ${p.last_agent}` : '';
+
+    const sddVal = p.sdd_score || 0;
+    document.getElementById('modal-sdd-score-val').innerText = `${sddVal}%`;
+    document.getElementById('modal-sdd-bar').style.width = `${sddVal}%`;
+    document.getElementById('modal-last-tag').innerText = p.last_tag ? `Última Tag: ${p.last_tag}` : 'Sem tags git';
+    document.getElementById('modal-tag-date').innerText = p.last_tag_date ? p.last_tag_date.slice(0, 10) : '';
 
     document.getElementById('modal-init-local').innerText = p.created_local ? p.created_local.slice(0, 10) : '—';
     document.getElementById('modal-init-github').innerText = p.created_github ? p.created_github.slice(0, 10) : '—';
