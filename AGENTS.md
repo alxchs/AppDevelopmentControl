@@ -2,6 +2,10 @@
 
 Este arquivo é a fonte mandatória de contexto para agentes de IA (**Claude Code** e **Antigravity**) atuando no repositório `AppDevelopmentControl`.
 
+## Metodologia
+
+Leia `~/.dev-method/METODO.md` (metodologia geral do Alexandre), `AGENT_CONTEXT.md` e `docs/agents/PLAYBOOK.md` antes de agir. Regras deste projeto ficam aqui.
+
 ---
 
 # Adendo de Qualidade e Evolução — AppDevelopmentControl

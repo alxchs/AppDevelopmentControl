@@ -37,7 +37,6 @@ export class ProjectScanner {
         if (fs.existsSync(gitPath)) {
           const stat = fs.statSync(gitPath);
           if (!stat.isDirectory()) {
-            // É worktree git pelo arquivo .git
             isWorktree = true;
             try {
               const gitdirContent = fs.readFileSync(gitPath, 'utf8').trim();
@@ -78,7 +77,6 @@ export class ProjectScanner {
       if (mainName && mainProjects.has(mainName)) {
         mainProjects.get(mainName).worktrees.push(wt);
       } else {
-        // Se não tem pai correspondente, trata como projeto autônomo
         mainProjects.set(wt.name, {
           name: wt.name,
           path: wt.path,
@@ -113,9 +111,9 @@ export class ProjectScanner {
       }
     }
 
-    // Limpar projetos legados no SQLite que eram apenas worktrees soltas
+    // Limpar projetos legados no SQLite que não existem fisicamente ou eram worktrees
     const canonicalNames = Array.from(mainProjects.keys());
-    this.db.clearNonCanonicalProjects(canonicalNames);
+    this.db.purgeNonExistentProjects(canonicalNames);
 
     // 5. Escanear cada projeto principal consolidado
     const results = [];
@@ -139,7 +137,6 @@ export class ProjectScanner {
         try {
           const headPath = path.join(wt.path, '.git');
           if (fs.existsSync(headPath)) {
-            // Se for arquivo .git, lê a ref
             const gitdirContent = fs.readFileSync(headPath, 'utf8').trim();
             const match = gitdirContent.match(/gitdir:\s*(.+)/i);
             if (match) {
@@ -167,8 +164,20 @@ export class ProjectScanner {
         };
       });
 
-      // Extrair propósito (do projeto principal, ou fallback de alguma worktree)
-      let { purpose, purposeSource } = this.extractPurpose(projectPath);
+      // Detecção de Stack Tecnológica
+      const stack = this.detectStack(projectPath);
+
+      // Metadados do AGENT_CONTEXT.md
+      const agentContext = this.extractAgentContext(projectPath);
+
+      // Governança Documental (Doc Health)
+      const docHealth = this.extractDocHealth(projectPath);
+
+      // Extrair comandos úteis (build, test, run)
+      const commands = this.extractCommands(projectPath);
+
+      // Extrair propósito (AGENT_CONTEXT -> README -> Package -> Csproj)
+      let { purpose, purposeSource } = this.extractPurpose(projectPath, agentContext);
       if ((!purpose || purpose === 'Propósito não documentado') && worktrees.length > 0) {
         for (const wt of worktrees) {
           const wtPurpose = this.extractPurpose(wt.path);
@@ -182,6 +191,12 @@ export class ProjectScanner {
 
       // Extrair métricas Git a partir do projeto principal (evita duplicação!)
       const gitMetrics = hasGit ? this.extractGitMetrics(projectPath) : this.extractFsMetrics(projectPath);
+
+      // Commits Recentes (últimos 5)
+      const recentCommits = hasGit ? this.extractRecentCommits(projectPath, 5) : [];
+
+      // Status da Árvore de Trabalho (Clean vs Dirty)
+      const treeStatus = hasGit ? this.checkWorkingTreeStatus(projectPath) : { is_clean: true, uncommitted_count: 0 };
 
       // Consolidar specs e ações do Alexandre do principal e de todas as worktrees
       const allPathsToScan = [{ path: projectPath, label: 'Principal' }, ...worktrees.map(w => ({ path: w.path, label: w.name }))];
@@ -211,7 +226,15 @@ export class ProjectScanner {
         last_commit_message: gitMetrics.last_commit_message,
         last_tag: gitMetrics.last_tag || null,
         last_tag_date: gitMetrics.last_tag_date || null,
-        last_agent: gitMetrics.last_agent || null,
+        last_agent: gitMetrics.last_agent || (recentCommits[0]?.agent) || null,
+        stack,
+        current_phase: agentContext.current_phase || null,
+        next_action: agentContext.next_action || null,
+        last_decision: agentContext.last_decision || null,
+        worktree_clean: treeStatus.is_clean ? 1 : 0,
+        uncommitted_count: treeStatus.uncommitted_count,
+        doc_health: docHealth,
+        commands,
         total_specs: totalSpecs,
         done_specs: doneSpecs,
         pending_specs: pendingSpecs,
@@ -223,26 +246,262 @@ export class ProjectScanner {
       // Avaliação de Saúde e Maturidade SDD
       const health = computeHealthStatus(projectRecord);
       const maturity = computeSddMaturityScore(projectRecord);
+      const pipelineStage = this.computePipelineStage(projectRecord);
 
       projectRecord.health_status = health.status;
       projectRecord.health_reason = health.reason;
       projectRecord.sdd_score = maturity.score;
+      projectRecord.pipeline_stage = pipelineStage;
 
       // Persistir no SQLite
       this.db.upsertProject(projectRecord);
       this.db.saveWorktrees(name, enrichedWorktrees);
       this.db.saveSpecs(name, specs);
       this.db.saveAlexandreActions(name, alexandreActions);
+      this.db.saveRecentCommits(name, recentCommits);
       this.db.updateFtsIndex(name, projectRecord.purpose, specs, alexandreActions, enrichedWorktrees);
 
-      return { ...projectRecord, worktrees: enrichedWorktrees };
+      return {
+        ...projectRecord,
+        worktrees: enrichedWorktrees,
+        recent_commits: recentCommits,
+        specs
+      };
     } catch (err) {
       console.error(`Erro ao escanear projeto ${projectDef.name}:`, err.message);
       return null;
     }
   }
 
-  extractPurpose(projectPath) {
+  computePipelineStage(p) {
+    if (p.alexandre_pending_count > 0) {
+      return 'validation'; // 3. Aguardando validação / deliberação do Alexandre
+    }
+    if ((p.done_specs > 0 || (p.total_specs > 0 && p.pending_specs === 0)) && p.pending_specs === 0) {
+      return 'stable'; // 4. Pronto / Publicado / Estável
+    }
+    if (
+      (p.changes_7d > 0) ||
+      (p.days_since_last_change !== undefined && p.days_since_last_change <= 7 && (p.pending_specs > 0 || p.changes_30d > 0)) ||
+      (p.current_phase && /WIP|Execução|Andamento|Fase|Spec|F0/i.test(p.current_phase))
+    ) {
+      if (p.total_specs === 0 && !p.last_tag && (p.changes_total || 0) < 15) {
+        return 'planning';
+      }
+      return 'active'; // 2. Em desenvolvimento ativo
+    }
+    if (p.days_since_last_change !== undefined && p.days_since_last_change > 30) {
+      return 'idle'; // 5. Em espera / Hibernando
+    }
+    if ((p.total_specs > 0 && (p.done_specs || 0) === 0) || (p.total_specs === 0 && !p.last_tag)) {
+      return 'planning'; // 1. Planejamento / Rascunho / Sem release
+    }
+    return 'idle'; // Em espera / Hibernando
+  }
+
+  extractCommands(projectPath) {
+    const cmds = [];
+
+    try {
+      if (!fs.existsSync(projectPath)) return cmds;
+      const files = fs.readdirSync(projectPath);
+
+      // 1. Procurar em AGENTS.md
+      const agentsPath = path.join(projectPath, 'AGENTS.md');
+      if (fs.existsSync(agentsPath)) {
+        try {
+          const content = fs.readFileSync(agentsPath, 'utf8');
+          const mkfileMatch = content.match(/mkfile\s+([a-zA-Z0-9_\-\.\/]+)?/i);
+          if (mkfileMatch) {
+            cmds.push(mkfileMatch[0].trim());
+          }
+          const testMatch = content.match(/(npm test|dotnet test|flutter test|pytest)/i);
+          if (testMatch && !cmds.includes(testMatch[0].trim())) {
+            cmds.push(testMatch[0].trim());
+          }
+        } catch (e) {}
+      }
+
+      // 2. Scripts dedicados na raiz
+      if (files.includes('start.cmd') && !cmds.includes('start.cmd')) cmds.push('start.cmd');
+      else if (files.includes('run.cmd') && !cmds.includes('run.cmd')) cmds.push('run.cmd');
+
+      if (files.includes('build.cmd') && !cmds.includes('build.cmd')) cmds.push('build.cmd');
+
+      // 3. Tecnologias canônicas
+      if (!cmds.some(c => c.startsWith('mkfile') || c.startsWith('dotnet') || c.startsWith('npm'))) {
+        if (files.some(f => f.endsWith('.dpr') || f.endsWith('.dpk'))) cmds.push('mkfile d');
+        else if (files.some(f => f.endsWith('.sln') || f.endsWith('.slnx') || f.endsWith('.csproj'))) cmds.push('dotnet build');
+        else if (files.includes('package.json')) cmds.push('npm test');
+      }
+
+      if (!cmds.some(c => c.includes('test'))) {
+        if (files.includes('package.json') && !cmds.includes('npm test')) cmds.push('npm test');
+        else if (files.some(f => f.endsWith('.sln') || f.endsWith('.csproj')) && !cmds.includes('dotnet test')) cmds.push('dotnet test');
+      }
+    } catch (e) {}
+
+    return cmds;
+  }
+
+  detectStack(projectPath) {
+    try {
+      if (!fs.existsSync(projectPath)) return 'Indefinida';
+      const files = fs.readdirSync(projectPath);
+
+      // Delphi
+      if (files.some(f => f.endsWith('.dpr') || f.endsWith('.dpk'))) {
+        return 'Delphi (VCL/FMX)';
+      }
+
+      // Flutter
+      if (files.includes('pubspec.yaml')) {
+        try {
+          const c = fs.readFileSync(path.join(projectPath, 'pubspec.yaml'), 'utf8');
+          if (c.includes('flutter:')) return 'Flutter / Dart';
+        } catch (e) {}
+        return 'Dart';
+      }
+
+      // C# / .NET (reconhece .slnx, .sln, .csproj, subpasta backend)
+      const hasDotNet = files.some(f => f.endsWith('.slnx') || f.endsWith('.sln') || f.endsWith('.csproj') || f === 'Directory.Build.props' || f.toLowerCase() === 'nuget.config') ||
+        (fs.existsSync(path.join(projectPath, 'backend')) && fs.readdirSync(path.join(projectPath, 'backend')).some(f => f.endsWith('.sln') || f.endsWith('.slnx')));
+
+      if (hasDotNet) {
+        // Fullstack .NET + Frontend Web
+        const hasFrontend = fs.existsSync(path.join(projectPath, 'frontend')) &&
+          (fs.existsSync(path.join(projectPath, 'frontend', 'vite.config.ts')) || fs.existsSync(path.join(projectPath, 'frontend', 'package.json')));
+        if (hasFrontend) {
+          return '.NET / C# + Vite / React';
+        }
+
+        // WinUI 3 vs WPF vs .NET
+        const hasWinUI = files.includes('Settings.XamlStyler') ||
+          (fs.existsSync(path.join(projectPath, 'src')) && fs.readdirSync(path.join(projectPath, 'src')).some(f => f.endsWith('.xaml')));
+        if (hasWinUI) {
+          return 'C# / WinUI 3';
+        }
+
+        return 'C# / .NET';
+      }
+
+      // Node.js / TypeScript / Electron
+      if (files.includes('package.json')) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8'));
+          const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+          if (deps['electron']) return 'Electron / Node.js';
+          if (deps['typescript'] || files.includes('tsconfig.json')) return 'TypeScript / Node';
+        } catch (e) {}
+        return 'Node.js';
+      }
+
+      // Python
+      if (files.includes('pyproject.toml') || files.includes('requirements.txt') || files.some(f => f.endsWith('.py'))) {
+        return 'Python';
+      }
+
+      // Rust / Go / C++
+      if (files.includes('Cargo.toml')) return 'Rust';
+      if (files.includes('go.mod')) return 'Go';
+      if (files.some(f => f.endsWith('.vcxproj') || f.endsWith('.cpp') || f.endsWith('.c'))) return 'C / C++';
+
+      // Scripts PowerShell / Shell
+      if (files.some(f => f.endsWith('.ps1') || f.endsWith('.cmd') || f.endsWith('.bat'))) {
+        return 'PowerShell / Scripts';
+      }
+
+      return 'Utilitário';
+    } catch (e) {
+      return 'Indefinida';
+    }
+  }
+
+  extractAgentContext(projectPath) {
+    const context = {
+      project: null,
+      objective: null,
+      current_phase: null,
+      next_action: null,
+      last_decision: null
+    };
+
+    const targetFile = path.join(projectPath, 'AGENT_CONTEXT.md');
+    if (fs.existsSync(targetFile)) {
+      try {
+        const text = fs.readFileSync(targetFile, 'utf8');
+        const projMatch = text.match(/PROJECT\s+([^\r\n]+)/i);
+        if (projMatch) context.project = projMatch[1].trim();
+
+        const objMatch = text.match(/OBJECTIVE\s+([^\r\n]+)/i);
+        if (objMatch) context.objective = objMatch[1].trim();
+
+        const phaseMatch = text.match(/CURRENT PHASE\s+([^\r\n]+)/i);
+        if (phaseMatch) context.current_phase = phaseMatch[1].trim();
+
+        const nextMatch = text.match(/NEXT ACTION\s+([^\r\n]+)/i);
+        if (nextMatch) context.next_action = nextMatch[1].trim();
+
+        const lastMatch = text.match(/LAST DECISION\s+([^\r\n]+)/i);
+        if (lastMatch) context.last_decision = lastMatch[1].trim();
+      } catch (e) {}
+    } else {
+      // Fallback: plano/STATUS.md ou STATUS.md
+      const statusCandidates = ['plano/STATUS.md', 'STATUS.md'];
+      for (const relStatus of statusCandidates) {
+        const sPath = path.join(projectPath, relStatus);
+        if (fs.existsSync(sPath)) {
+          try {
+            const sContent = fs.readFileSync(sPath, 'utf8');
+            // Procurar ficha em andamento (🟦)
+            const lines = sContent.split('\n');
+            const inProgressLine = lines.find(l => l.includes('🟦') && l.includes('|'));
+            if (inProgressLine) {
+              const parts = inProgressLine.split('|').map(p => p.trim()).filter(p => p);
+              if (parts.length >= 2) {
+                const ficha = parts[0];
+                const obs = parts[parts.length - 1] || '';
+                context.current_phase = `Ficha em andamento: ${ficha}`;
+                context.next_action = obs.slice(0, 150);
+              }
+            } else {
+              // Se não houver em andamento, pegar a última aprovada (✅)
+              const approvedLines = lines.filter(l => l.includes('✅') && l.includes('|'));
+              if (approvedLines.length > 0) {
+                const lastApproved = approvedLines[approvedLines.length - 1];
+                const parts = lastApproved.split('|').map(p => p.trim()).filter(p => p);
+                if (parts.length >= 2) {
+                  context.current_phase = `Última ficha entregue: ${parts[0]}`;
+                }
+              }
+            }
+            if (context.current_phase) break;
+          } catch (e) {}
+        }
+      }
+    }
+
+    return context;
+  }
+
+  extractDocHealth(projectPath) {
+    const checkFile = (f) => fs.existsSync(path.join(projectPath, f));
+    return {
+      has_agents: checkFile('AGENTS.md'),
+      has_agent_context: checkFile('AGENT_CONTEXT.md') || checkFile('plano/STATUS.md'),
+      has_status: checkFile('STATUS.md') || checkFile('plano/STATUS.md'),
+      has_decisions: checkFile('DECISIONS.md') || checkFile('docs/12-decisoes.md') || checkFile('docs/decisoes.md'),
+      has_changelog: checkFile('CHANGELOG.md'),
+      has_playbook: checkFile('docs/agents/PLAYBOOK.md') || checkFile('PLAYBOOK.md'),
+      has_specs: fs.existsSync(path.join(projectPath, 'docs', 'specs')) || fs.existsSync(path.join(projectPath, 'plano', 'tarefas'))
+    };
+  }
+
+  extractPurpose(projectPath, agentContext = null) {
+    if (agentContext && agentContext.objective) {
+      return { purpose: agentContext.objective.slice(0, 300), purposeSource: 'AGENT_CONTEXT.md' };
+    }
+
     const readmeCandidates = ['README.md', 'readme.md', 'Readme.md'];
     for (const r of readmeCandidates) {
       const rPath = path.join(projectPath, r);
@@ -293,6 +552,66 @@ export class ProjectScanner {
     } catch (e) {}
 
     return { purpose: 'Propósito não documentado', purposeSource: '' };
+  }
+
+  extractRecentCommits(projectPath, limit = 5) {
+    const commits = [];
+    try {
+      const out = execSync(`git log -n ${limit} --format="%H|%h|%an|%ae|%aI|%ar|%s"`, {
+        cwd: projectPath,
+        encoding: 'utf8',
+        env: GIT_ENV,
+        stdio: ['ignore', 'pipe', 'ignore']
+      }).trim();
+
+      if (out) {
+        const lines = out.split('\n').filter(l => l.trim());
+        for (const line of lines) {
+          const [hash, short_hash, author_name, author_email, date_iso, date_relative, ...msgParts] = line.split('|');
+          const message = msgParts.join('|');
+
+          let agent = 'Alexandre';
+          const combined = `${author_name} ${author_email} ${message}`.toLowerCase();
+          if (combined.includes('claude')) {
+            agent = 'Claude';
+          } else if (combined.includes('antigravity') || combined.includes('agy')) {
+            agent = 'AGY';
+          } else if (combined.includes('alexandre') || combined.includes('alxch')) {
+            agent = 'Alexandre';
+          }
+
+          commits.push({
+            hash: hash || '',
+            short_hash: short_hash || (hash ? hash.substring(0, 7) : ''),
+            author_name: author_name || 'Desconhecido',
+            agent,
+            date_iso: date_iso || null,
+            date_relative: date_relative || '',
+            message: message || ''
+          });
+        }
+      }
+    } catch (e) {}
+    return commits;
+  }
+
+  checkWorkingTreeStatus(projectPath) {
+    try {
+      const out = execSync('git status --porcelain', {
+        cwd: projectPath,
+        encoding: 'utf8',
+        env: GIT_ENV,
+        stdio: ['ignore', 'pipe', 'ignore']
+      }).trim();
+
+      if (!out) {
+        return { is_clean: true, uncommitted_count: 0 };
+      }
+      const count = out.split('\n').filter(l => l.trim()).length;
+      return { is_clean: count === 0, uncommitted_count: count };
+    } catch (e) {
+      return { is_clean: true, uncommitted_count: 0 };
+    }
   }
 
   extractGitMetrics(projectPath) {
@@ -367,13 +686,13 @@ export class ProjectScanner {
           stdio: ['ignore', 'pipe', 'ignore']
         });
         if (/claude/i.test(recentAuthors)) {
-          metrics.last_agent = 'Claude Code';
+          metrics.last_agent = 'Claude';
         } else if (/antigravity|agy/i.test(recentAuthors)) {
-          metrics.last_agent = 'Antigravity';
+          metrics.last_agent = 'AGY';
         } else if (/alexandre|alxch/i.test(recentAuthors)) {
           metrics.last_agent = 'Alexandre';
         } else {
-          metrics.last_agent = 'Desenvolvedor';
+          metrics.last_agent = 'Alexandre';
         }
       } catch (e) {}
 
@@ -505,33 +824,101 @@ export class ProjectScanner {
     const seenActionKeys = new Set();
 
     for (const { path: pPath, label } of pathsToScan) {
-      // 1. DECISIONS.md
-      const decisionsPath = path.join(pPath, 'DECISIONS.md');
-      if (fs.existsSync(decisionsPath)) {
-        try {
-          const dContent = fs.readFileSync(decisionsPath, 'utf8');
-          const lines = dContent.split('\n');
-          for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            if (/PENDING DECISION|Aguardando Alexandre|Decisão.*Alexandre/i.test(line)) {
-              const snippet = lines.slice(Math.max(0, i - 1), Math.min(lines.length, i + 3)).join(' ').trim();
-              const title = line.replace(/[#*_-]/g, '').trim() || 'Decisão pendente em DECISIONS.md';
-              const key = `${title}_${snippet.slice(0, 50)}`;
-              if (!seenActionKeys.has(key)) {
-                seenActionKeys.add(key);
-                actions.push({
-                  file_path: 'DECISIONS.md',
-                  title,
-                  snippet: snippet.slice(0, 200),
-                  source_worktree: label !== 'Principal' ? label : null
-                });
+      // 1. Decisões em caminhos conhecidos (DECISIONS.md, docs/12-decisoes.md, docs/decisoes.md)
+      const decisionCandidates = ['DECISIONS.md', 'docs/12-decisoes.md', 'docs/decisoes.md', 'docs/DECISIONS.md'];
+      for (const relDec of decisionCandidates) {
+        const decisionsPath = path.join(pPath, relDec);
+        if (fs.existsSync(decisionsPath)) {
+          try {
+            const dContent = fs.readFileSync(decisionsPath, 'utf8');
+            const lines = dContent.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i];
+              // Detecta PENDING DECISION ou deliberação explicitamente pendente
+              const isPendingDecision = /PENDING DECISION|Decisão pendente/i.test(line);
+              const isAwaitingAlexandre = /Aguardando Alexandre/i.test(line) && !/APROVAD[AO]|autorizad[ao]|concluíd[ao]|Decisão do Alexandre:/i.test(line);
+
+              if (isPendingDecision || isAwaitingAlexandre) {
+                const snippet = lines.slice(Math.max(0, i - 1), Math.min(lines.length, i + 3)).join(' ').trim();
+                let title = line.replace(/[#*_]/g, '').trim();
+                // Tenta extrair o código da decisão (ex: D-26, D-27)
+                const decMatch = title.match(/(D-?\d+[^—\(]*(?:\([^)]+\))?)/i);
+                if (decMatch) {
+                  title = decMatch[1].trim();
+                } else if (title.length > 80) {
+                  title = title.slice(0, 80) + '...';
+                }
+                const key = `${relDec}_${title.slice(0, 40)}`;
+                if (!seenActionKeys.has(key)) {
+                  seenActionKeys.add(key);
+                  actions.push({
+                    file_path: relDec,
+                    title,
+                    snippet: snippet.slice(0, 200),
+                    source_worktree: label !== 'Principal' ? label : null
+                  });
+                }
               }
             }
-          }
-        } catch (e) {}
+          } catch (e) {}
+        }
       }
 
-      // 2. docs/specs
+      // 2. Bloqueios em FILA.md / docs/qualidade/FILA.md
+      const filaCandidates = ['docs/qualidade/FILA.md', 'FILA.md', 'docs/FILA.md'];
+      for (const relFila of filaCandidates) {
+        const filaPath = path.join(pPath, relFila);
+        if (fs.existsSync(filaPath)) {
+          try {
+            const fContent = fs.readFileSync(filaPath, 'utf8');
+            const lines = fContent.split('\n');
+            for (const line of lines) {
+              if (/\[BLOQUEADO\]/i.test(line) && /Alexandre/i.test(line)) {
+                const title = line.replace(/[#*_-]/g, '').replace(/\[BLOQUEADO\]/i, '').trim();
+                const key = `${relFila}_${title}`;
+                if (!seenActionKeys.has(key)) {
+                  seenActionKeys.add(key);
+                  actions.push({
+                    file_path: relFila,
+                    title: `Bloqueio: ${title}`,
+                    snippet: line.trim().slice(0, 200),
+                    source_worktree: label !== 'Principal' ? label : null
+                  });
+                }
+              }
+            }
+          } catch (e) {}
+        }
+      }
+
+      // 3. Status prévio de fichas de plano/STATUS.md
+      const statusFichasMap = new Map();
+      const statusCandidates = ['plano/STATUS.md', 'STATUS.md'];
+      for (const relStatus of statusCandidates) {
+        const sPath = path.join(pPath, relStatus);
+        if (fs.existsSync(sPath)) {
+          try {
+            const sContent = fs.readFileSync(sPath, 'utf8');
+            const lines = sContent.split('\n');
+            for (const l of lines) {
+              if (l.includes('|')) {
+                const parts = l.split('|').map(p => p.trim()).filter(p => p);
+                if (parts.length >= 2) {
+                  const fichaName = parts[0].replace(/[*_`]/g, '').trim();
+                  const icon = parts[1];
+                  if (icon.includes('✅') || /aprovad[ao]/i.test(icon)) {
+                    statusFichasMap.set(fichaName.toLowerCase(), 'done');
+                  } else if (icon.includes('🟦') || /andamento/i.test(icon)) {
+                    statusFichasMap.set(fichaName.toLowerCase(), 'in_progress');
+                  }
+                }
+              }
+            }
+          } catch (e) {}
+        }
+      }
+
+      // 4. docs/specs
       const specsDir = path.join(pPath, 'docs', 'specs');
       if (fs.existsSync(specsDir) && fs.statSync(specsDir).isDirectory()) {
         try {
@@ -546,6 +933,9 @@ export class ProjectScanner {
             let pendingTasks = 0;
             let status = 'pending';
             let summary = '';
+            const pendingTasksList = [];
+
+            let isApprovedInHeader = false;
 
             if (fs.existsSync(specPath)) {
               try {
@@ -553,7 +943,23 @@ export class ProjectScanner {
                 const titleMatch = specContent.match(/^#\s*(.+)$/m);
                 if (titleMatch) summary = titleMatch[1].trim();
 
-                if (/PENDING DECISION|Aguardando Alexandre|Aprovação Alexandre/i.test(specContent)) {
+                // Checa se já foi formalmente aprovada
+                isApprovedInHeader = /Estado:\s*\*\*APROVAD[AO]\*\*|Status:\s*APROVAD[AO]|✅/i.test(specContent);
+                if (isApprovedInHeader) {
+                  status = 'done';
+                }
+
+                // Checa mapeamento em plano/STATUS.md
+                const folderShort = specFolder.split('-')[0].toLowerCase();
+                if (statusFichasMap.has(folderShort)) {
+                  status = statusFichasMap.get(folderShort);
+                }
+
+                // Pendências reais do Alexandre em spec.md (descartando menções de aprovação passada ou decisões já capturadas em D-xx)
+                const hasExplicitPendingDecision = /PENDING DECISION/i.test(specContent) && !/\((D-\d+)/i.test(specContent);
+                const hasAguardandoAlexandre = /Aguardando Alexandre/i.test(specContent) && !/Estado:\s*\*\*APROVAD[AO]\*\*|aprovad[ao] pelo Alexandre|autorizado pelo Alexandre/i.test(specContent);
+
+                if (hasExplicitPendingDecision || hasAguardandoAlexandre) {
                   const title = `Aprovação/Decisão Pendente em ${specFolder}`;
                   const key = `${specFolder}_${title}`;
                   if (!seenActionKeys.has(key)) {
@@ -580,26 +986,33 @@ export class ProjectScanner {
                 pendingTasks = pendingBoxes.length;
                 completedTasks = totalTasks - pendingTasks;
 
-                if (totalTasks > 0 && pendingTasks === 0) {
+                // Se houver caixas de tarefa, elas definem o status; senão preserva status de aprovação
+                if (totalTasks > 0) {
+                  status = pendingTasks === 0 ? 'done' : 'pending';
+                } else if (isApprovedInHeader) {
                   status = 'done';
-                } else {
-                  status = 'pending';
                 }
 
                 const taskLines = tasksContent.split('\n');
                 for (const tl of taskLines) {
-                  if (/- \[[ ]\]/i.test(tl) && /Alexandre|Aprovação|Decisão/i.test(tl)) {
-                    const title = tl.replace(/^- \[[ ]\]\s*/, '').trim();
-                    const key = `${specFolder}_${title}`;
-                    if (!seenActionKeys.has(key)) {
-                      seenActionKeys.add(key);
-                      actions.push({
-                        spec_id: specFolder,
-                        file_path: `docs/specs/${specFolder}/tasks.md`,
-                        title,
-                        snippet: `Spec ${specFolder}: Tarefa pendente dependendo do Alexandre`,
-                        source_worktree: label !== 'Principal' ? label : null
-                      });
+                  if (/- \[[ ]\]/i.test(tl)) {
+                    const taskName = tl.replace(/^- \[[ ]\]\s*/, '').replace(/[*_`]/g, '').trim();
+                    if (taskName && pendingTasksList.length < 5) {
+                      pendingTasksList.push(taskName);
+                    }
+                    if (/Alexandre|Aprovação|Decisão/i.test(tl) && !/aprovad[ao]|autorizad[ao]/i.test(tl)) {
+                      const title = taskName;
+                      const key = `${specFolder}_${title}`;
+                      if (!seenActionKeys.has(key)) {
+                        seenActionKeys.add(key);
+                        actions.push({
+                          spec_id: specFolder,
+                          file_path: `docs/specs/${specFolder}/tasks.md`,
+                          title,
+                          snippet: `Spec ${specFolder}: Tarefa pendente dependendo do Alexandre`,
+                          source_worktree: label !== 'Principal' ? label : null
+                        });
+                      }
                     }
                   }
                 }
@@ -615,6 +1028,7 @@ export class ProjectScanner {
                 total_tasks: totalTasks,
                 completed_tasks: completedTasks,
                 pending_tasks: pendingTasks,
+                pending_tasks_json: pendingTasksList,
                 summary,
                 source_worktree: label !== 'Principal' ? label : null
               });
