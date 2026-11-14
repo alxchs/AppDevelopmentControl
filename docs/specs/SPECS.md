@@ -1,6 +1,6 @@
 # Controle e Índice Mestre de Specs (SPECS.md) — AppDevelopmentControl
 
-> **Gerado a partir de docs/production/production-control.json (Protocolo de Produção v2, migração de 2026-11-13). Não editar à mão: edite o JSON e regenere.** A versão anterior (6 specs, 24 pts) está preservada no git. Regra METODO.md §25: toda spec tem Peso Fibonacci; atualizar antes de implementar e na entrega.
+> **Gerado a partir de docs/production/production-control.json (Protocolo de Produção v2). Não editar à mão: edite o JSON e regenere com `node tools/gen-specs-md.mjs`.** Regra METODO.md §25: toda spec tem Peso Fibonacci; atualizar antes de implementar e na entrega.
 
 ---
 
@@ -14,25 +14,25 @@ Escala e referências em [../production/estimation-reference.md](../production/e
 {
   "projeto": "AppDevelopmentControl",
   "versao_atual": "1.0.0 (package.json)",
-  "data_extracao": "2026-11-13",
+  "data_extracao": "2026-11-14",
   "fonte": "docs/production/production-control.json",
   "metricas": {
     "total_specs": 8,
-    "total_pontos": 37.0,
+    "total_pontos": 37,
     "finalizadas": {
       "quantidade": 6,
       "pontos": 24,
       "percentual": 64.9
     },
     "em_andamento": {
-      "quantidade": 0,
-      "pontos": 0,
-      "percentual": 0.0
-    },
-    "fila": {
       "quantidade": 2,
       "pontos": 13,
       "percentual": 35.1
+    },
+    "fila": {
+      "quantidade": 0,
+      "pontos": 0,
+      "percentual": 0.0
     },
     "dependendo_alexandre": {
       "quantidade": 0,
@@ -56,8 +56,8 @@ Escala e referências em [../production/estimation-reference.md](../production/e
 | Categoria | Quantidade | Pontos | % dos pontos |
 |:---|:---:|:---:|:---:|
 | ⚪ Finalizadas | 6 | 24 | 64.9% |
-| 🔴 Em Andamento | 0 | 0 | 0% |
-| 🟢 Fila | 2 | 13 | 35.1% |
+| 🔴 Em Andamento | 2 | 13 | 35.1% |
+| 🟢 Fila | 0 | 0 | 0% |
 | 🟡 Dependendo de mim / Alexandre | 0 | 0 | 0% |
 | ⛔ Impedidas | 0 | 0 | 0% |
 | ➖ Inválidas / Descartadas | 0 | 0 | 0% |
@@ -73,12 +73,12 @@ Escala e referências em [../production/estimation-reference.md](../production/e
 - **SPEC-0005** (Peso 5) — Veracidade dos dados: binds SQL, falsos positivos de acoes do Alexandre, resiliencia documental
 - **SPEC-0006** (Peso 3) — Ingestao nativa de SPECS.md e pesos de dificuldade (Fibonacci) na dashboard
 
-### 🔴 Em Andamento (0 specs · 0 pontos)
-*(nenhuma)*
-
-### 🟢 Fila (2 specs · 13 pontos)
+### 🔴 Em Andamento (2 specs · 13 pontos)
 - **SPEC-0007** (Peso 8) — Dashboard consome docs/production v2: control.json, events.jsonl, baseline, reconstrucao SQLite, validacao de schema, metricas dos 11 e 12 do protocolo
 - **SPEC-0008** (Peso 5) — Testes da ingestao v2: fixtures de control/events validos e invalidos, reconstrucao do SQLite, schema, duplicidade, metricas
+
+### 🟢 Fila (0 specs · 0 pontos)
+*(nenhuma)*
 
 ### 🟡 Dependendo de mim / Alexandre (0 specs · 0 pontos)
 *(nenhuma)*
@@ -99,6 +99,6 @@ Escala e referências em [../production/estimation-reference.md](../production/e
 | **SPEC-0004** | Project Spotlight, seletor rapido, funil de estagios e stepper de specs (legado: Spec 004) | 3 | ⚪ Finalizada | AGY | `369b6b4` |
 | **SPEC-0005** | Veracidade dos dados: binds SQL, falsos positivos de acoes do Alexandre, resiliencia documental (legado: Spec 005) | 5 | ⚪ Finalizada | AGY | `369b6b4` |
 | **SPEC-0006** | Ingestao nativa de SPECS.md e pesos de dificuldade (Fibonacci) na dashboard (legado: Spec 006) | 3 | ⚪ Finalizada | AGY | `8f20b5e` |
-| **SPEC-0007** | Dashboard consome docs/production v2: control.json, events.jsonl, baseline, reconstrucao SQLite, validacao de schema, metricas dos 11 e 12 do protocolo | 8 | 🟢 Fila | — | — |
-| **SPEC-0008** | Testes da ingestao v2: fixtures de control/events validos e invalidos, reconstrucao do SQLite, schema, duplicidade, metricas | 5 | 🟢 Fila | — | — |
+| **SPEC-0007** | Dashboard consome docs/production v2: control.json, events.jsonl, baseline, reconstrucao SQLite, validacao de schema, metricas dos 11 e 12 do protocolo | 8 | 🔴 Em Andamento | claude | `fa23af1` |
+| **SPEC-0008** | Testes da ingestao v2: fixtures de control/events validos e invalidos, reconstrucao do SQLite, schema, duplicidade, metricas | 5 | 🔴 Em Andamento | claude | `8abb739` |
 

@@ -12,8 +12,15 @@ const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PORT = parseInt(process.env.PORT || '3333', 10);
 
-const db = new AppDb();
-const scanner = new ProjectScanner(db);
+// Banco e scanner padrao so nascem quando preciso (importar este modulo nao abre o banco real); testes injetam os seus.
+let defaultDeps = null;
+function getDefaultDeps() {
+  if (!defaultDeps) {
+    const d = new AppDb();
+    defaultDeps = { db: d, scanner: new ProjectScanner(d) };
+  }
+  return defaultDeps;
+}
 
 // Helper para ler body JSON
 function parseJsonBody(req) {
@@ -43,7 +50,8 @@ function sendJson(res, statusCode, data) {
 }
 
 // Servidor HTTP
-export function createServer() {
+export function createServer(deps = {}) {
+  const { db, scanner } = deps.db ? { db: deps.db, scanner: deps.scanner || new ProjectScanner(deps.db) } : getDefaultDeps();
   const server = http.createServer(async (req, res) => {
     const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const pathname = parsedUrl.pathname;
@@ -86,6 +94,19 @@ export function createServer() {
       const project = db.getProjectByName(name);
       if (!project) return sendJson(res, 404, { error: 'Projeto não encontrado' });
       return sendJson(res, 200, project);
+    }
+
+    // 4b. Producao v2 de um projeto (SPEC-0007 FR-017): origem, importacao, SPECs, problemas e indicadores
+    const productionMatch = pathname.match(/^\/api\/projects\/([^/]+)\/production$/);
+    if (productionMatch && method === 'GET') {
+      const name = decodeURIComponent(productionMatch[1]);
+      const project = db.getProjectByName(name);
+      if (!project) return sendJson(res, 404, { error: 'Projeto não encontrado' });
+      const detail = db.getProductionDetail(name);
+      const summary = db.getProductionSummary(name, project.specs_source);
+      return sendJson(res, 200, detail
+        ? { name, source: summary.source, ...detail }
+        : { name, source: summary.source, import: null, specs: [], issues: [], event_count: 0, metrics: null, baseline: null });
     }
 
     // 5. Update do Propósito de um projeto

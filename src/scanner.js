@@ -2,6 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { computeHealthStatus, computeSddMaturityScore } from './evaluator.js';
+import { readProductionControl, mapToLegacy, computeProductionMetrics } from './production.js';
+
+const SPECS_MASTER_CANDIDATES = ['docs/specs/SPECS.md', 'SPECS.md', 'docs/SPECS.md'];
 
 const GIT_ENV = {
   ...process.env,
@@ -10,9 +13,10 @@ const GIT_ENV = {
 };
 
 export class ProjectScanner {
-  constructor(db, baseDir = 'c:\\desenv\\utils') {
+  constructor(db, baseDir = 'c:\\desenv\\utils', opts = {}) {
     this.db = db;
     this.baseDir = baseDir;
+    this.nowIso = opts.now || (() => new Date().toISOString()); // relogio injetavel (testes deterministicos)
   }
 
   scanAll() {
@@ -200,7 +204,22 @@ export class ProjectScanner {
 
       // Consolidar specs e ações do Alexandre do principal e de todas as worktrees
       const allPathsToScan = [{ path: projectPath, label: 'Principal' }, ...worktrees.map(w => ({ path: w.path, label: w.name }))];
-      const { specs, alexandreActions, specsMetrics } = this.consolidateSpecsAndActions(allPathsToScan, name);
+      const legacy = this.consolidateSpecsAndActions(allPathsToScan, name);
+      let { specs, specsMetrics } = legacy;
+      const { alexandreActions } = legacy; // decisoes pendentes nao estao no control.json: sempre da leitura atual
+
+      // Controle de producao v2 (SPEC-0007): principal primeiro, worktree so como fallback (D-006). Aceito
+      // (valido ou valido com alertas) vence o SPECS.md (FR-012); rejeitado/ausente: caminho da spec 006 intacto.
+      const production = this.resolveProduction(projectPath, worktrees);
+      const accepted = production.prod.status === 'valid' || production.prod.status === 'valid_with_alerts';
+      if (accepted) {
+        const mapped = mapToLegacy(production.prod.control);
+        specs = mapped.specs.map(s => ({ ...s, source_worktree: production.sourceWorktree }));
+        specsMetrics = mapped.specsMetrics;
+      }
+      const specsSource = accepted
+        ? (production.sourceWorktree ? 'production_v2_worktree' : 'production_v2')
+        : (this.hasSpecsMaster(allPathsToScan) ? 'specs_md' : 'none');
 
       const totalSpecs = specsMetrics?.total_specs || specs.length;
       const doneSpecs = specsMetrics?.finalizadas?.quantidade !== undefined ? specsMetrics.finalizadas.quantidade : specs.filter(s => s.status === 'done').length;
@@ -266,6 +285,7 @@ export class ProjectScanner {
       this.db.saveWorktrees(name, enrichedWorktrees);
       this.db.saveSpecs(name, specs);
       this.db.saveAlexandreActions(name, alexandreActions);
+      this.persistProduction(name, production, specsSource);
       this.db.saveRecentCommits(name, recentCommits);
       this.db.updateFtsIndex(name, projectRecord.purpose, specs, alexandreActions, enrichedWorktrees);
 
@@ -278,6 +298,42 @@ export class ProjectScanner {
     } catch (err) {
       console.error(`Erro ao escanear projeto ${projectDef.name}:`, err.message);
       return null;
+    }
+  }
+
+  // Le (somente leitura) o controle v2: o checkout principal primeiro; so se ele NAO tiver
+  // docs/production/production-control.json, a primeira worktree (ordem de nome) que tiver. Nunca mescla (D-006).
+  resolveProduction(projectPath, worktrees = []) {
+    const main = readProductionControl(projectPath);
+    if (main.found) return { prod: main, sourceWorktree: null };
+    const sorted = [...worktrees].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    for (const wt of sorted) {
+      const r = readProductionControl(wt.path);
+      if (r.found) return { prod: r, sourceWorktree: wt.name };
+    }
+    return { prod: main, sourceWorktree: null };
+  }
+
+  hasSpecsMaster(paths) {
+    for (const { path: p } of paths) {
+      for (const rel of SPECS_MASTER_CANDIDATES) {
+        try { if (fs.existsSync(path.join(p, rel))) return true; } catch (e) { /* ilegivel: ignora */ }
+      }
+    }
+    return false;
+  }
+
+  // Persiste a importacao v2 sem nunca derrubar o projeto (NFR-003): falha vira log e o resto segue.
+  persistProduction(name, production, specsSource) {
+    try {
+      const { prod, sourceWorktree } = production;
+      if (prod.status === 'valid' || prod.status === 'valid_with_alerts') {
+        prod.metrics = computeProductionMetrics(prod.control, prod.events, prod.baseline, { now: this.nowIso(), issues: prod.issues, eventStats: prod.eventStats });
+      }
+      this.db.replaceProductionImport(name, prod, { sourceKind: sourceWorktree ? 'production_v2_worktree' : 'production_v2' });
+      this.db.setSpecsSource(name, specsSource);
+    } catch (e) {
+      console.error(`Erro ao gravar producao v2 de ${name}:`, e.message);
     }
   }
 

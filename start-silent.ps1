@@ -17,7 +17,8 @@ if ($conn) {
   }
 }
 
-$p = Start-Process -FilePath node -ArgumentList 'src/server.js' -WorkingDirectory $root `
+$serverScript = Join-Path $root 'src\server.js'
+$p = Start-Process -FilePath 'node.exe' -ArgumentList $serverScript -WorkingDirectory $root `
   -WindowStyle Hidden -PassThru `
   -RedirectStandardOutput (Join-Path $logDir 'out.log') -RedirectStandardError (Join-Path $logDir 'err.log')
 Write-Output "Servidor iniciado em segundo plano (PID $($p.Id)): http://localhost:3333 | logs em $logDir"

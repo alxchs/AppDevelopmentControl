@@ -30,6 +30,20 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 - **Interação Rápida "Focar"**: Botão nos cards do grid e na tabela densa para selecionar e focar instantaneamente no Spotlight Hero.
 - **Suíte de Testes Automatizados Expandida**: 9 suítes completas de aceite validadas em `test/test_all.mjs`.
 
+## [Não lançado] - 2026-11-14 (SPEC-0007 e SPEC-0008 — Ingestão do controle de produção v2)
+
+### Adicionado
+- **Leitura do protocolo de produção v2**: lê `docs/production/production-control.json`, `production-events.jsonl` e `production-baseline.json` de cada projeto (somente leitura), valida schema, valores, referências, duplicidades, ciclos e eventos, e guarda tudo em tabelas `production_*` reconstruíveis (idempotentes, em transação).
+- **Prioridade v2**: com controle v2 aceito, pontos, estados e categorias vêm dele; sem ele, a ingestão do `SPECS.md` (spec 006) segue como antes. Principal vence worktree; ações do Alexandre preservadas.
+- **Indicadores gerenciais** (§11 e §12 do protocolo) com "sem dado" para o desconhecido.
+- **API**: campo aditivo `production` em `/api/projects` e `/api/projects/:name`; rota nova `GET /api/projects/:name/production`.
+- **UI**: selo de origem (v2, v2 · worktree, SPECS.md), contagem de alertas e painel de indicadores no modal do projeto.
+- **Testes**: `test/test_production_v2.mjs` (fixtures por código, banco temporário) encadeado no `npm test`; `tools/perf/scan-timing.ps1` cronometra a varredura.
+
+### Alterado
+- `createServer(deps)` aceita banco e scanner injetados; importar `src/server.js` não abre mais o banco real.
+- `projects.specs_source` (coluna nova) registra a origem dos números de specs.
+
 ## [2.0.0] - 2026-11-04 (Spec 003 — Deep Executive Intelligence & Technical Portfolio Depth)
 
 ### Adicionado

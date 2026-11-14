@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { uniqueSpecs, readSpecHours, categoryOf } from './production.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -178,6 +179,79 @@ export class AppDb {
     try { this.db.exec('ALTER TABLE projects ADD COLUMN doc_health TEXT'); } catch (e) {}
     try { this.db.exec("ALTER TABLE projects ADD COLUMN pipeline_stage TEXT DEFAULT 'idle'"); } catch (e) {}
     try { this.db.exec('ALTER TABLE projects ADD COLUMN commands TEXT'); } catch (e) {}
+    // Origem dos numeros de specs do projeto (SPEC-0007 AC-1/AC-3): production_v2 | production_v2_worktree | specs_md | none
+    try { this.db.exec('ALTER TABLE projects ADD COLUMN specs_source TEXT'); } catch (e) {}
+
+    this.initProductionTables();
+  }
+
+  // Tabelas da ingestao de docs/production v2 (SPEC-0007). Base DERIVADA e reconstruivel: so os arquivos do
+  // projeto sao fonte de verdade; apagar o banco e varrer de novo devolve os mesmos dados.
+  initProductionTables() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS production_imports (
+        project_name TEXT PRIMARY KEY,
+        project_id TEXT,
+        source_kind TEXT NOT NULL,
+        control_path TEXT,
+        events_path TEXT,
+        baseline_path TEXT,
+        imported_at TEXT NOT NULL,
+        declared_updated_at TEXT,
+        status TEXT NOT NULL,
+        last_good_at TEXT,
+        issue_counts_json TEXT,
+        metrics_json TEXT,
+        baseline_json TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS production_specs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_name TEXT NOT NULL,
+        spec_id TEXT NOT NULL,
+        title TEXT,
+        type TEXT,
+        state TEXT,
+        category TEXT,
+        points REAL,
+        points_confidence TEXT,
+        hours_original REAL,
+        hours_current REAL,
+        hours_actual REAL,
+        hours_remaining REAL,
+        evidence_count INTEGER DEFAULT 0,
+        progress_json TEXT,
+        dependencies_json TEXT,
+        blockers_json TEXT,
+        raw_json TEXT,
+        UNIQUE(project_name, spec_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS production_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_name TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        ts TEXT,
+        entity_type TEXT,
+        entity_id TEXT,
+        event_type TEXT,
+        actor TEXT,
+        summary TEXT,
+        raw_json TEXT,
+        UNIQUE(project_name, event_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS production_issues (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_name TEXT NOT NULL,
+        code TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        entity_id TEXT,
+        file TEXT,
+        line INTEGER,
+        message TEXT
+      );
+    `);
   }
 
   purgeNonExistentProjects(existingNames) {
@@ -189,6 +263,9 @@ export class AppDb {
     this.db.prepare(`DELETE FROM project_worktrees WHERE project_name NOT IN (${placeholders})`).run(...existingNames);
     this.db.prepare(`DELETE FROM project_recent_commits WHERE project_name NOT IN (${placeholders})`).run(...existingNames);
     this.db.prepare(`DELETE FROM projects_fts WHERE project_name NOT IN (${placeholders})`).run(...existingNames);
+    for (const tbl of ['production_imports', 'production_specs', 'production_events', 'production_issues']) {
+      this.db.prepare(`DELETE FROM ${tbl} WHERE project_name NOT IN (${placeholders})`).run(...existingNames);
+    }
   }
 
   clearNonCanonicalProjects(canonicalNames) {
@@ -372,6 +449,10 @@ export class AppDb {
     }
   }
 
+  setSpecsSource(projectName, source) {
+    this.db.prepare('UPDATE projects SET specs_source = ? WHERE name = ?').run(source, projectName);
+  }
+
   saveSpecs(projectName, specs) {
     this.db.prepare('DELETE FROM project_specs WHERE project_name = ?').run(projectName);
     const stmt = this.db.prepare(`
@@ -397,6 +478,123 @@ export class AppDb {
         source_worktree: s.source_worktree || null
       });
     }
+  }
+
+  // Importacao de producao v2 de um projeto, em UMA transacao e idempotente (o conjunto resultante substitui o
+  // anterior do projeto). `prod` e o resultado de readProductionControl (opcionalmente com .metrics).
+  // - status 'absent': remove as linhas do projeto (sem controle v2 nao ha o que guardar);
+  // - status 'rejected': mantem a ultima importacao boa (D-009), troca so os problemas e marca o status;
+  // - demais: substitui tudo. Nunca grava nada no projeto monitorado.
+  replaceProductionImport(projectName, prod, opts = {}) {
+    const now = opts.now || new Date().toISOString();
+    const tables = ['production_specs', 'production_events', 'production_issues', 'production_imports'];
+    const wipe = () => { for (const tb of tables) this.db.prepare(`DELETE FROM ${tb} WHERE project_name = ?`).run(projectName); };
+    const counts = { info: 0, warning: 0, error: 0 };
+    for (const i of prod.issues || []) if (counts[i.severity] !== undefined) counts[i.severity]++;
+    const insIssue = this.db.prepare('INSERT INTO production_issues (project_name, code, severity, entity_id, file, line, message) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const putIssues = () => { for (const i of prod.issues || []) insIssue.run(projectName, i.code, i.severity, i.entity_id ?? null, i.file ?? null, i.line ?? null, i.message ?? null); };
+
+    this.db.exec('BEGIN');
+    try {
+      if (prod.status === 'absent') {
+        wipe();
+      } else if (prod.status === 'rejected') {
+        const prev = this.db.prepare('SELECT status, imported_at, last_good_at FROM production_imports WHERE project_name = ?').get(projectName);
+        const lastGood = prev ? (prev.status === 'rejected' ? prev.last_good_at : prev.imported_at) : null;
+        this.db.prepare('DELETE FROM production_issues WHERE project_name = ?').run(projectName);
+        putIssues();
+        if (prev) {
+          this.db.prepare('UPDATE production_imports SET status = ?, imported_at = ?, last_good_at = ?, issue_counts_json = ? WHERE project_name = ?')
+            .run('rejected', now, lastGood, JSON.stringify(counts), projectName);
+        } else {
+          this.db.prepare(`INSERT INTO production_imports (project_name, project_id, source_kind, control_path, events_path, baseline_path, imported_at, declared_updated_at, status, last_good_at, issue_counts_json, metrics_json, baseline_json)
+            VALUES (?, NULL, ?, ?, ?, ?, ?, NULL, 'rejected', NULL, ?, NULL, NULL)`)
+            .run(projectName, opts.sourceKind || 'production_v2', prod.files?.control ?? null, prod.files?.events ?? null, prod.files?.baseline ?? null, now, JSON.stringify(counts));
+        }
+      } else {
+        wipe();
+        const control = prod.control || {};
+        this.db.prepare(`INSERT INTO production_imports (project_name, project_id, source_kind, control_path, events_path, baseline_path, imported_at, declared_updated_at, status, last_good_at, issue_counts_json, metrics_json, baseline_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`)
+          .run(projectName, control.project?.project_id ?? null, opts.sourceKind || 'production_v2', prod.files?.control ?? null, prod.files?.events ?? null, prod.files?.baseline ?? null,
+            now, prod.declared_updated_at ?? null, prod.status, JSON.stringify(counts), prod.metrics ? JSON.stringify(prod.metrics) : null, prod.baseline ? JSON.stringify(prod.baseline) : null);
+        const insSpec = this.db.prepare(`INSERT INTO production_specs (project_name, spec_id, title, type, state, category, points, points_confidence, hours_original, hours_current, hours_actual, hours_remaining, evidence_count, progress_json, dependencies_json, blockers_json, raw_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+        for (const s of uniqueSpecs(control)) {
+          const h = readSpecHours(s);
+          insSpec.run(projectName, s.id, s.title ?? null, s.type ?? null, s.state ?? null, categoryOf(s), num(s.points), s.points_confidence ?? null,
+            num(h.original), num(h.current), num(h.actual), num(h.remaining), Array.isArray(s.evidence) ? s.evidence.length : 0,
+            JSON.stringify(s.progress ?? null), JSON.stringify(s.dependencies ?? []), JSON.stringify(s.blockers ?? []), JSON.stringify(s));
+        }
+        const insEv = this.db.prepare('INSERT INTO production_events (project_name, event_id, ts, entity_type, entity_id, event_type, actor, summary, raw_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        for (const ev of prod.events || []) {
+          const { _line, ...raw } = ev;
+          const derived = /^([A-Z]+)-\d+$/.test(ev.entity_id) ? ev.entity_id.split('-')[0] : null;
+          insEv.run(projectName, ev.event_id, ev.timestamp ?? null, ev.entity_type ?? derived, ev.entity_id ?? null, ev.event_type ?? null, ev.actor ?? null, ev.summary ?? null, JSON.stringify(raw));
+        }
+        putIssues();
+      }
+      this.db.exec('COMMIT');
+    } catch (e) {
+      try { this.db.exec('ROLLBACK'); } catch (e2) { /* sem transacao ativa */ }
+      throw e;
+    }
+    return { status: prod.status, issue_counts: counts };
+  }
+
+  // Resumo aditivo da producao v2 para /api/projects (FR-017): sempre presente; sem importacao = status 'absent'.
+  getProductionSummary(projectName, specsSource = null) {
+    const imp = this.db.prepare('SELECT * FROM production_imports WHERE project_name = ?').get(projectName);
+    const parse = (v) => { try { return v == null ? null : JSON.parse(v); } catch (e) { return null; } };
+    if (!imp) {
+      return { source: specsSource || null, status: 'absent', source_kind: null, imported_at: null, declared_updated_at: null, last_good_at: null, issue_counts: { info: 0, warning: 0, error: 0 }, metrics: null };
+    }
+    return {
+      source: specsSource || null,
+      status: imp.status,
+      source_kind: imp.source_kind,
+      imported_at: imp.imported_at,
+      declared_updated_at: imp.declared_updated_at,
+      last_good_at: imp.last_good_at,
+      issue_counts: parse(imp.issue_counts_json) || { info: 0, warning: 0, error: 0 },
+      metrics: parse(imp.metrics_json)
+    };
+  }
+
+  // Detalhe da producao v2 de um projeto (origem, importacao, specs, problemas, eventos). null se nunca importado.
+  getProductionDetail(projectName) {
+    const imp = this.db.prepare('SELECT * FROM production_imports WHERE project_name = ?').get(projectName);
+    if (!imp) return null;
+    const parse = (v) => { try { return v == null ? null : JSON.parse(v); } catch (e) { return null; } };
+    const specs = this.db.prepare('SELECT * FROM production_specs WHERE project_name = ? ORDER BY spec_id ASC').all(projectName).map((s) => ({
+      ...s,
+      progress: parse(s.progress_json),
+      dependencies: parse(s.dependencies_json) || [],
+      blockers: parse(s.blockers_json) || []
+    }));
+    const issues = this.db.prepare('SELECT code, severity, entity_id, file, line, message FROM production_issues WHERE project_name = ? ORDER BY id ASC').all(projectName);
+    const eventCount = this.db.prepare('SELECT COUNT(*) AS n FROM production_events WHERE project_name = ?').get(projectName).n;
+    return {
+      import: {
+        project_name: imp.project_name,
+        project_id: imp.project_id,
+        source_kind: imp.source_kind,
+        control_path: imp.control_path,
+        events_path: imp.events_path,
+        baseline_path: imp.baseline_path,
+        imported_at: imp.imported_at,
+        declared_updated_at: imp.declared_updated_at,
+        status: imp.status,
+        last_good_at: imp.last_good_at,
+        issue_counts: parse(imp.issue_counts_json) || { info: 0, warning: 0, error: 0 }
+      },
+      specs,
+      issues,
+      event_count: eventCount,
+      metrics: parse(imp.metrics_json),
+      baseline: parse(imp.baseline_json)
+    };
   }
 
   saveAlexandreActions(projectName, actions) {
@@ -500,6 +698,7 @@ export class AppDb {
       if (p.commands && typeof p.commands === 'string') {
         try { p.commands = JSON.parse(p.commands); } catch (e) {}
       }
+      p.production = this.getProductionSummary(p.name, p.specs_source);
     }
     return projects;
   }
@@ -526,6 +725,7 @@ export class AppDb {
     if (project.commands && typeof project.commands === 'string') {
       try { project.commands = JSON.parse(project.commands); } catch (e) {}
     }
+    project.production = this.getProductionSummary(name, project.specs_source);
     return project;
   }
 

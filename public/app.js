@@ -635,6 +635,8 @@ function renderProjectsGrid(projects) {
               ${stackBadge}
               ${worktreeBadge}
               ${treeBadge}
+              ${prodSourceBadge(p.production)}
+              ${prodAlertCounts(p.production)}
             </div>
             ${alexandreBadge}
           </div>
@@ -751,6 +753,7 @@ function renderProjectsTable(projects) {
         <td class="py-3 px-3">
           <div>${stackBadge}</div>
           <div class="mt-1">${treeBadge}</div>
+          <div class="mt-1 flex items-center gap-1 flex-wrap">${prodSourceBadge(p.production)} ${prodAlertCounts(p.production)}</div>
         </td>
 
         <!-- Fase & Próxima Ação -->
@@ -893,6 +896,7 @@ async function openProjectModal(projectName) {
     // Specs
     document.getElementById('modal-specs-count').innerText = p.specs ? `${p.specs.length}${p.total_points ? ` (${p.done_points || 0}/${p.total_points} pts)` : ''}` : 0;
     renderSpecsList(p.specs);
+    loadProductionPanel(projectName);
 
     // Ações do Alexandre
     const alexActions = p.alexandre_actions || [];
@@ -907,6 +911,20 @@ async function openProjectModal(projectName) {
     lucide.createIcons();
   } catch (e) {
     alert(`Erro ao abrir detalhes: ${e.message}`);
+  }
+}
+
+// Painel de producao v2 do modal: busca o detalhe e desenha; falha aqui nunca impede abrir o modal.
+async function loadProductionPanel(projectName) {
+  const box = document.getElementById('modal-production-panel');
+  if (!box) return;
+  box.innerHTML = '';
+  try {
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectName)}/production`);
+    if (!res.ok) return;
+    box.innerHTML = prodPanelHtml(await res.json());
+  } catch (e) {
+    box.innerHTML = '';
   }
 }
 

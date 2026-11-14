@@ -53,6 +53,65 @@
 
 ---
 
+## D-005 — Ingestão de docs/production v2: ponto fora de Fibonacci entra nos totais (SPEC-0007, 2026-11-14)
+
+- **Context:** O control.json de um projeto pode trazer pontos fora de 1, 2, 3, 5, 8, 13, 21 (erro de preenchimento).
+- **Problem:** Excluir a SPEC dos totais oculta trabalho; incluí-la sem aviso esconde o erro.
+- **Options:** (1) fora dos totais até corrigir; (2) entra como lido, com alerta de erro visível.
+- **Decision:** Entra nos totais como lido, com issue de severidade erro na SPEC, até ser corrigido na origem.
+- **Reason:** O total não pode ocultar trabalho; o erro fica visível e derruba o indicador de qualidade do controle.
+- **Trade-offs:** O total pode conter um valor inválido temporariamente.
+- **Consequences:** Validação sinaliza POINTS_NOT_FIBONACCI sem alterar o valor.
+
+---
+
+## D-006 — Worktrees: o checkout principal vence (SPEC-0007, 2026-11-14)
+
+- **Context:** Só uma worktree pode ter docs/production (branch de migração não integrada).
+- **Problem:** Dois controles diferentes para o mesmo projeto.
+- **Options:** (1) mesclar; (2) principal primeiro, worktree só como fallback.
+- **Decision:** Ler primeiro o checkout principal; usar a worktree só se o principal não tiver docs/production. Nunca mesclar controles.
+- **Reason:** Uma única fonte de verdade por projeto, com origem marcada.
+- **Trade-offs:** Uma worktree mais nova não sobrepõe o principal.
+- **Consequences:** A origem da leitura é registrada na importação.
+
+---
+
+## D-007 — Escopo dos indicadores §11 e §12 do protocolo (SPEC-0007, 2026-11-14)
+
+- **Context:** O protocolo define muitos indicadores; nem todos têm dado sustentado.
+- **Problem:** Calcular o que o controle não sustenta produziria números enganosos.
+- **Options:** (1) todos; (2) só o sustentado por contagens do controle.
+- **Decision:** §11 inteiro; do §12 apenas produção, esforço, previsibilidade, bloqueios e fluxo parcial. Valor e comparação de agentes ficam fora.
+- **Reason:** Cada indicador com base explícita; nulo permanece nulo.
+- **Trade-offs:** Indicadores de valor e de agentes ficam para outra spec.
+- **Consequences:** Sem nota única; componentes com n de itens e "sem dado".
+
+---
+
+## D-008 — Horas: aceitar os dois formatos (SPEC-0007, 2026-11-14)
+
+- **Context:** O protocolo §7 usa original_estimate_hours etc.; os controles reais usam hours:{original,current,actual,remaining}.
+- **Problem:** Rejeitar um dos formatos quebraria projetos válidos.
+- **Options:** (1) só o do protocolo; (2) só o real; (3) ambos.
+- **Decision:** Aceitar os dois na leitura, com aviso HOURS_FIELD_VARIANT quando usar o nome do protocolo.
+- **Reason:** Compatibilidade com os controles já gerados sem ignorar o protocolo.
+- **Trade-offs:** Dois caminhos de leitura.
+- **Consequences:** Horas nulas permanecem nulas; nunca viram zero.
+
+---
+
+## D-009 — Fronteira de rejeição da importação (SPEC-0007, 2026-11-14)
+
+- **Context:** Arquivos de controle são escritos por IAs em paralelo e podem estar truncados.
+- **Problem:** Distinguir o que rejeita a importação do que só gera alerta.
+- **Options:** (1) rejeitar qualquer erro; (2) rejeitar só erro de schema.
+- **Decision:** Erro de schema (bloco ou tipo ausente, schema_version diferente de 2.0, JSON inválido) rejeita a importação e mantém a última boa; erro só de valor importa com alertas. Arquivo truncado numa leitura mantém a última importação boa e registra o problema.
+- **Reason:** Dado parcial não deve sobrescrever dado bom; erro de valor ainda é informativo.
+- **Trade-offs:** Uma importação rejeitada deixa dados anteriores na tela até a próxima varredura boa.
+- **Consequences:** Status da importação: válido, válido com alertas ou rejeitado.
+
+---
 ## PENDING DECISION
 
 *(Nenhuma dúvida pendente no momento. As specs 001 e 002 estão concluídas e auditadas.)*

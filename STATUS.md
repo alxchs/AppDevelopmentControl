@@ -1,6 +1,15 @@
 # Status do Projeto — AppDevelopmentControl
 
 ## O que está PRONTO e FUNCIONANDO
+- **Ingestão do controle de produção v2 (SPEC-0007) e sua suíte (SPEC-0008)** — EM VALIDAÇÃO, branch `feature/ingestao-producao-v2` (sem push, sem merge na main). Estado por critério de aceite: `docs/agents/handoffs/2026-11-14_0050_claude_ingestao-producao-v2.md`.
+  - *Leitura somente leitura* de `docs/production/` (control, eventos, baseline) de cada projeto, sem nunca escrever neles; erro isolado por projeto (CONFIRMED: `npm test`, testes AC-14/AC-21/AC-22 e hash de pasta).
+  - *Validação* de schema, valores (pontos Fibonacci, datas, percentuais), referências, duplicidades, ciclos, eventos (linha corrompida, repetido, de outro projeto, órfão) e declarado x calculado.
+  - *Banco derivado e reconstruível*: tabelas `production_*` em transação, idempotentes; importação rejeitada mantém a última boa (D-009).
+  - *Prioridade*: v2 aceito vence o `SPECS.md` da spec 006; principal vence worktree (D-006); `alexandreActions` preservadas; origem em `projects.specs_source`.
+  - *Indicadores* §11 e §12 (produção, esforço com cobertura, previsibilidade, fluxo, bloqueios, qualidade do controle, baseline): horas nulas permanecem nulas ("sem dado").
+  - *API aditiva*: `production` em `/api/projects` e `GET /api/projects/:name/production`. *UI mínima*: selo de origem, contagem de alertas e painel de indicadores no modal (sem vermelho).
+  - **NOT TESTED**: abrir a Dashboard e usar o selo/painel (teste de tela só depois das 23:59 e sem roubar foco); a UI foi validada só por HTML/JS servido em memória e execução do JS em `vm`.
+  - Varredura real (`npm run scan`, 26 projetos): mediana 20721 ms antes e 18868 ms depois (3 execuções cada), sem regressão; 4 projetos reais têm control.json rejeitado por falta de blocos obrigatórios (DevToolchain, KillTask, OneToOneSupport, SmartDockGroups) e 1 tem 15 eventos incompletos (FolderOrganAIzer): são problemas dos arquivos desses projetos, sinalizados pela própria Dashboard.
 - **Veracidade dos Dados do Portfólio & Resiliência Documental (Spec 005)**:
   - *Correção Crítica de Binds SQL*: Binds parametrizados corrigidos em `db.js` (`(p.name)` e `(name)`), restaurando o preenchimento de worktrees, specs, recent commits e stepper para todos os projetos da dashboard.
   - *Eliminação de Falsos Positivos de Ações do Alexandre*: Filtro estrito que descarta menções históricas passadas (`Estado: **APROVADA** pelo Alexandre`, `autorizado pelo Alexandre`) e foca unicamente em deliberações e bloqueios ativos.
@@ -21,7 +30,7 @@
 - **Métricas de Saúde e SDD Maturity Score (0-100%)**: Avaliação automatizada de maturidade metodológica e farol gerencial.
 - **Busca Autocontida (Zero Tokens)**: Busca fuzzy em memória + SQLite FTS5 instantânea.
 - **Exportação para Google NotebookLM**: Dossiê executivo completo exportado com um clique.
-- **Suíte de Testes Automatizados**: 10/10 suítes com 100% de sucesso em `test/test_all.mjs`.
+- **Suíte de Testes Automatizados**: `npm test` roda `test/test_all.mjs` (suítes da Dashboard) e `test/test_production_v2.mjs` (SPEC-0008: ingestão v2, banco temporário, fixtures por código).
 
 ## Limitações Conhecidas
 - **Testes E2E com navegador headless (Playwright)**: `NOT TESTED` (o projeto possui cobertura completa de lógica, endpoints REST, scanner, SQLite e renderização via testes unitários/integração).

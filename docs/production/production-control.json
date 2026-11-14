@@ -8,7 +8,7 @@
     "status": "active",
     "migration_status": "migrated",
     "baseline_at": "2026-11-13T10:00:00-03:00",
-    "last_updated_at": "2026-11-13T10:00:00-03:00",
+    "last_updated_at": "2026-11-14T00:45:00-03:00",
     "last_updated_by": "claude"
   },
   "summary": {
@@ -16,22 +16,22 @@
     "task_count": null,
     "status_counts": {
       "completed": 6,
-      "not_started": 2
+      "in_validation": 2
     },
-    "total_points": 37.0,
-    "completed_points_equivalent": 24.0,
-    "remaining_points": 13.0,
+    "total_points": 37,
+    "completed_points_equivalent": 24,
+    "remaining_points": 13,
     "original_estimate_hours": 34,
     "current_estimate_hours": 34,
     "actual_hours": null,
-    "remaining_estimate_hours": 34,
+    "remaining_estimate_hours": null,
     "hours_note": "horas so existem para SPEC-0007/0008 (provisorias); as 6 specs legadas tem horas desconhecidas, nao somadas",
-    "development_percent": 65,
-    "test_validation_percent": 65,
+    "development_percent": 100,
+    "test_validation_percent": 96,
     "integration_percent": 65,
-    "documentation_percent": 65,
-    "overall_percent": 65,
-    "percent_rule": "ponderado por pontos: 24 de 37",
+    "documentation_percent": 100,
+    "overall_percent": 90,
+    "percent_rule": "ponderado por pontos sobre as 8 SPECs: 24 pts a 100% + SPEC-0007 (8) e SPEC-0008 (5) com dimensoes 100/90/0/100; integracao 0 porque nada foi integrado na main",
     "data_confidence": "medium"
   },
   "specs": [
@@ -388,10 +388,10 @@
       "legacy_ids": [],
       "title": "Dashboard consome docs/production v2: control.json, events.jsonl, baseline, reconstrucao SQLite, validacao de schema, metricas dos 11 e 12 do protocolo",
       "type": "feature",
-      "state": "not_started",
-      "category": "fila",
+      "state": "in_validation",
+      "category": "em_andamento",
       "priority": "medium",
-      "owner": null,
+      "owner": "claude",
       "points": 8,
       "points_confidence": "low",
       "points_justification": "PROVISORIO. Varios componentes (leitor de JSON/JSONL, validacao de schema e referencias, deteccao de duplicidade, reconstrucao do SQLite a partir dos arquivos, preservacao de origem/data de importacao, metricas de producao/esforco/previsibilidade/fluxo/bloqueios) sobre um scanner ja grande (src/scanner.js 1238 linhas); comparavel a SPEC-0002/0003 (5) mas com mais componentes e validacoes. Recalibrar na spec/plan.",
@@ -399,36 +399,76 @@
         "original": 24,
         "current": 24,
         "actual": null,
-        "remaining": 24,
+        "remaining": null,
         "actual_method": null,
         "note": "estimativa provisoria de esforco ativo, independente dos pontos; confianca low"
       },
       "progress": {
-        "development": 0,
-        "test_validation": 0,
+        "development": 100,
+        "test_validation": 90,
         "integration": 0,
-        "documentation": 0,
+        "documentation": 100,
         "overall_rule": "media simples das 4 dimensoes"
       },
-      "progress_note": "sem spec.md escrita; apenas registro na fila",
-      "evidence": [],
+      "progress_note": "T0 a T12 implementadas na branch feature/ingestao-producao-v2 (sem push, sem merge na main). Falta: abrir a Dashboard e usar o selo/painel (NOT TESTED; teste de tela so depois das 23:59 e sem roubar foco) e a integracao na main (so por palavra-chave do Alexandre).",
+      "evidence": [
+        {
+          "kind": "commit",
+          "ref": "fa23af1",
+          "status": "OBSERVED",
+          "note": "T0 a T6: leitura, validacao, eventos, banco e mapeamento legado"
+        },
+        {
+          "kind": "commit",
+          "ref": "f0f84cf",
+          "status": "OBSERVED",
+          "note": "T7 integracao no scanner (v2 vence SPECS.md; fallback de worktree D-006)"
+        },
+        {
+          "kind": "commit",
+          "ref": "bcea233",
+          "status": "OBSERVED",
+          "note": "T8 indicadores (computeProductionMetrics)"
+        },
+        {
+          "kind": "commit",
+          "ref": "47e6632",
+          "status": "OBSERVED",
+          "note": "T9 API aditiva /api/projects e /api/projects/:name/production"
+        },
+        {
+          "kind": "commit",
+          "ref": "1315e19",
+          "status": "OBSERVED",
+          "note": "T10 UI minima (selo, alertas, painel); abrir e usar NOT TESTED"
+        },
+        {
+          "kind": "commit",
+          "ref": "6a9409d",
+          "status": "OBSERVED",
+          "note": "T11 varredura cronometrada: mediana 20721 ms -> 18868 ms (npm run scan)"
+        }
+      ],
       "blockers": [],
       "dependencies": [],
       "source_files": [
-        "docs/production/SPEC-INDEX.md"
+        "docs/production/SPEC-INDEX.md",
+        "docs/specs/007-ingestao-producao-v2/spec.md",
+        "docs/specs/007-ingestao-producao-v2/plan.md",
+        "docs/specs/007-ingestao-producao-v2/tasks.md"
       ],
-      "acceptance_summary": "Nao implementar agora. Requisitos: ler production-control.json/events.jsonl/baseline por projeto; validar schema 2.0 e referencias; detectar duplicidades; reconstruir SQLite a partir dos arquivos; nunca escrever de volta; sinalizar divergencias; calcular indicadores 11/12 apenas com dados sustentados.",
-      "migration_status": "registered_at_migration"
+      "acceptance_summary": "Implementado. Leitura somente leitura de docs/production por projeto; validacao de schema, valores, referencias, duplicidades, eventos; banco reconstruivel e idempotente; v2 vence SPECS.md; indicadores 11/12 com nulo permanecendo nulo; API e UI aditivas. Estado por AC no handoff 2026-11-14_0050_claude_ingestao-producao-v2.md.",
+      "migration_status": "in_validation"
     },
     {
       "id": "SPEC-0008",
       "legacy_ids": [],
       "title": "Testes da ingestao v2: fixtures de control/events validos e invalidos, reconstrucao do SQLite, schema, duplicidade, metricas",
       "type": "test",
-      "state": "not_started",
-      "category": "fila",
+      "state": "in_validation",
+      "category": "em_andamento",
       "priority": "medium",
-      "owner": null,
+      "owner": "claude",
       "points": 5,
       "points_confidence": "low",
       "points_justification": "PROVISORIO. Teste de SPEC-0007: fixtures validas e invalidas, casos de borda (JSONL corrompido, ID duplicado, ponto fora de Fibonacci, completed sem evidencia), reconstrucao idempotente; a suite atual (test/test_all.mjs, 11 secoes) e de arquivo unico.",
@@ -436,19 +476,50 @@
         "original": 10,
         "current": 10,
         "actual": null,
-        "remaining": 10,
+        "remaining": null,
         "actual_method": null,
         "note": "estimativa provisoria; confianca low"
       },
       "progress": {
-        "development": 0,
-        "test_validation": 0,
+        "development": 100,
+        "test_validation": 90,
         "integration": 0,
-        "documentation": 0,
+        "documentation": 100,
         "overall_rule": "media simples das 4 dimensoes"
       },
-      "progress_note": "depende de SPEC-0007",
-      "evidence": [],
+      "progress_note": "Suite test/test_production_v2.mjs (78 aprovados, 0 reprovados, 1 pulado: abrir a UI) encadeada no npm test. Mutacao manual feita (3 defeitos detectados). Valida a SPEC-0007, que ainda espera a prova de tela.",
+      "evidence": [
+        {
+          "kind": "commit",
+          "ref": "8abb739",
+          "status": "OBSERVED",
+          "note": "T1: fixtures e infraestrutura de teste"
+        },
+        {
+          "kind": "commit",
+          "ref": "f0f84cf",
+          "status": "OBSERVED",
+          "note": "U-T7: integracao no scanner"
+        },
+        {
+          "kind": "commit",
+          "ref": "bcea233",
+          "status": "OBSERVED",
+          "note": "U-T8: indicadores"
+        },
+        {
+          "kind": "commit",
+          "ref": "47e6632",
+          "status": "OBSERVED",
+          "note": "U-T9: REST em memoria e controle real do PDFReader (somente leitura)"
+        },
+        {
+          "kind": "commit",
+          "ref": "1315e19",
+          "status": "OBSERVED",
+          "note": "UI em memoria e ausencia de vermelho"
+        }
+      ],
       "blockers": [],
       "dependencies": [
         "SPEC-0007"
@@ -459,7 +530,7 @@
       "validates": [
         "SPEC-0007"
       ],
-      "migration_status": "registered_at_migration"
+      "migration_status": "in_validation"
     }
   ],
   "dependencies": [
@@ -481,7 +552,7 @@
   ],
   "decisions_required": [],
   "audit": {
-    "last_incremental_audit_at": "2026-11-13T10:00:00-03:00",
+    "last_incremental_audit_at": "2026-11-14T00:45:00-03:00",
     "last_full_audit_at": "2026-11-13T10:00:00-03:00",
     "unreconciled_changes": 0,
     "evidence_coverage_percent": 100
