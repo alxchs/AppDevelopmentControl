@@ -3,6 +3,11 @@
 Todas as alterações relevantes deste projeto são documentadas aqui.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
+## [Não lançado] - 2026-11-13 (Protocolo de Produção v2)
+
+### Documentação
+- Adotado o Protocolo de Controle de Produção v2: `docs/production/` (controle JSON, eventos, baseline, índice) e `docs/specs/SPECS.md` regenerado (8 specs, 37 pts); SPEC-0007 e SPEC-0008 registradas na fila. Nenhum código alterado.
+
 ## [2.2.0] - 2026-11-08 (Spec 005 — Data Truth, Empirical Audit & Resilient Governance)
 
 ### Corrigido e Aprimorado

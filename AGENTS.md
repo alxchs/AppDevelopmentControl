@@ -56,6 +56,11 @@ Elevar a confiabilidade e o valor gerencial da dashboard existente, preservando 
     - Atualizar `SPEC.md`, `PLAN.md` e `TASKS.md` conforme as decisões aprovadas.
     - Nunca marcar testes como concluídos sem evidências verificáveis.
 
+11. **Controle de Pesos e Índice Mestre de Specs (REGRA DURA, 12/11/2026; METODO.md §25):**
+    - Manter `docs/specs/SPECS.md` rigorosamente atualizado com todas as specs, pesos (escala Fibonacci: 1, 2, 3, 5, 8), bloco JSON e as categorias mandatórias (finalizadas, em andamento, fila, dependendo de mim, impedidas, inválidas).
+    - Toda vez que uma alteração for solicitada, atualizar o arquivo de controle **antes de qualquer ação técnica** e novamente na conclusão da entrega.
+    - O próprio AppDevelopmentControl deve evoluir para consumir nativamente os arquivos `docs/specs/SPECS.md` dos projetos do portfólio.
+
 ---
 
 ## Critério de Conclusão de Qualquer Fase ou Tarefa

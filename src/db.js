@@ -59,6 +59,10 @@ export class AppDb {
         total_specs INTEGER DEFAULT 0,
         done_specs INTEGER DEFAULT 0,
         pending_specs INTEGER DEFAULT 0,
+        total_points INTEGER DEFAULT 0,
+        done_points INTEGER DEFAULT 0,
+        pending_points INTEGER DEFAULT 0,
+        specs_summary_json TEXT,
         alexandre_pending_count INTEGER DEFAULT 0,
         worktrees_count INTEGER DEFAULT 0,
         health_status TEXT DEFAULT 'incubating',
@@ -109,6 +113,8 @@ export class AppDb {
         spec_id TEXT NOT NULL,
         spec_name TEXT NOT NULL,
         status TEXT NOT NULL,
+        weight INTEGER DEFAULT 1,
+        category TEXT DEFAULT 'pending',
         total_tasks INTEGER DEFAULT 0,
         completed_tasks INTEGER DEFAULT 0,
         pending_tasks INTEGER DEFAULT 0,
@@ -147,6 +153,12 @@ export class AppDb {
     `);
 
     // Migrações incrementais de colunas
+    try { this.db.exec('ALTER TABLE projects ADD COLUMN total_points INTEGER DEFAULT 0'); } catch (e) {}
+    try { this.db.exec('ALTER TABLE projects ADD COLUMN done_points INTEGER DEFAULT 0'); } catch (e) {}
+    try { this.db.exec('ALTER TABLE projects ADD COLUMN pending_points INTEGER DEFAULT 0'); } catch (e) {}
+    try { this.db.exec('ALTER TABLE projects ADD COLUMN specs_summary_json TEXT'); } catch (e) {}
+    try { this.db.exec('ALTER TABLE project_specs ADD COLUMN weight INTEGER DEFAULT 1'); } catch (e) {}
+    try { this.db.exec("ALTER TABLE project_specs ADD COLUMN category TEXT DEFAULT 'pending'"); } catch (e) {}
     try { this.db.exec('ALTER TABLE projects ADD COLUMN worktrees_count INTEGER DEFAULT 0'); } catch (e) {}
     try { this.db.exec('ALTER TABLE project_specs ADD COLUMN source_worktree TEXT'); } catch (e) {}
     try { this.db.exec('ALTER TABLE project_specs ADD COLUMN pending_tasks_json TEXT'); } catch (e) {}
@@ -198,6 +210,7 @@ export class AppDb {
         max_inactive_days, days_since_last_change,
         last_commit_date, last_commit_message,
         total_specs, done_specs, pending_specs,
+        total_points, done_points, pending_points, specs_summary_json,
         alexandre_pending_count, worktrees_count,
         health_status, health_reason, sdd_score, last_tag, last_tag_date, last_agent,
         stack, current_phase, next_action, last_decision, worktree_clean, uncommitted_count, doc_health,
@@ -210,6 +223,7 @@ export class AppDb {
         @max_inactive_days, @days_since_last_change,
         @last_commit_date, @last_commit_message,
         @total_specs, @done_specs, @pending_specs,
+        @total_points, @done_points, @pending_points, @specs_summary_json,
         @alexandre_pending_count, @worktrees_count,
         @health_status, @health_reason, @sdd_score, @last_tag, @last_tag_date, @last_agent,
         @stack, @current_phase, @next_action, @last_decision, @worktree_clean, @uncommitted_count, @doc_health,
@@ -236,6 +250,10 @@ export class AppDb {
         total_specs = excluded.total_specs,
         done_specs = excluded.done_specs,
         pending_specs = excluded.pending_specs,
+        total_points = excluded.total_points,
+        done_points = excluded.done_points,
+        pending_points = excluded.pending_points,
+        specs_summary_json = excluded.specs_summary_json,
         alexandre_pending_count = excluded.alexandre_pending_count,
         worktrees_count = excluded.worktrees_count,
         health_status = excluded.health_status,
@@ -278,6 +296,10 @@ export class AppDb {
       total_specs: p.total_specs || 0,
       done_specs: p.done_specs || 0,
       pending_specs: p.pending_specs || 0,
+      total_points: p.total_points || 0,
+      done_points: p.done_points || 0,
+      pending_points: p.pending_points || 0,
+      specs_summary_json: typeof p.specs_summary_json === 'object' ? JSON.stringify(p.specs_summary_json) : (p.specs_summary_json || null),
       alexandre_pending_count: p.alexandre_pending_count || 0,
       worktrees_count: p.worktrees_count || 0,
       health_status: p.health_status || 'incubating',
@@ -354,9 +376,9 @@ export class AppDb {
     this.db.prepare('DELETE FROM project_specs WHERE project_name = ?').run(projectName);
     const stmt = this.db.prepare(`
       INSERT INTO project_specs (
-        project_name, spec_id, spec_name, status, total_tasks, completed_tasks, pending_tasks, pending_tasks_json, summary, source_worktree
+        project_name, spec_id, spec_name, status, weight, category, total_tasks, completed_tasks, pending_tasks, pending_tasks_json, summary, source_worktree
       ) VALUES (
-        @project_name, @spec_id, @spec_name, @status, @total_tasks, @completed_tasks, @pending_tasks, @pending_tasks_json, @summary, @source_worktree
+        @project_name, @spec_id, @spec_name, @status, @weight, @category, @total_tasks, @completed_tasks, @pending_tasks, @pending_tasks_json, @summary, @source_worktree
       )
     `);
     for (const s of specs) {
@@ -365,6 +387,8 @@ export class AppDb {
         spec_id: s.spec_id,
         spec_name: s.spec_name,
         status: s.status,
+        weight: s.weight || 1,
+        category: s.category || (s.status === 'done' ? 'finalizada' : 'em_andamento'),
         total_tasks: s.total_tasks || 0,
         completed_tasks: s.completed_tasks || 0,
         pending_tasks: s.pending_tasks || 0,
@@ -448,6 +472,8 @@ export class AppDb {
         spec_id: s.spec_id,
         title: s.spec_name || s.summary || s.spec_id,
         status: s.status,
+        weight: s.weight || 1,
+        category: s.category || 'fila',
         progress: pct,
         pct,
         total_tasks: total,
@@ -465,6 +491,9 @@ export class AppDb {
       const rawSpecs = this.db.prepare('SELECT * FROM project_specs WHERE project_name = ? ORDER BY spec_id ASC').all(p.name);
       p.stepper = this.buildStepper(rawSpecs);
 
+      if (p.specs_summary_json && typeof p.specs_summary_json === 'string') {
+        try { p.specs_summary = JSON.parse(p.specs_summary_json); } catch (e) {}
+      }
       if (p.doc_health && typeof p.doc_health === 'string') {
         try { p.doc_health = JSON.parse(p.doc_health); } catch (e) {}
       }
@@ -488,6 +517,9 @@ export class AppDb {
     project.stepper = this.buildStepper(project.specs);
     project.alexandre_actions = this.db.prepare('SELECT * FROM alexandre_actions WHERE project_name = ?').all(name);
     project.recent_commits = this.getRecentCommits(name, 5);
+    if (project.specs_summary_json && typeof project.specs_summary_json === 'string') {
+      try { project.specs_summary = JSON.parse(project.specs_summary_json); } catch (e) {}
+    }
     if (project.doc_health && typeof project.doc_health === 'string') {
       try { project.doc_health = JSON.parse(project.doc_health); } catch (e) {}
     }
@@ -518,7 +550,10 @@ export class AppDb {
       SELECT
         SUM(total_specs) as total,
         SUM(done_specs) as done,
-        SUM(pending_specs) as pending
+        SUM(pending_specs) as pending,
+        SUM(total_points) as total_points,
+        SUM(done_points) as done_points,
+        SUM(pending_points) as pending_points
       FROM projects
     `).get();
     const alexandreTotal = this.db.prepare('SELECT COUNT(*) as count FROM alexandre_actions').get().count;
@@ -534,6 +569,9 @@ export class AppDb {
       totalSpecs: specsAgg.total || 0,
       doneSpecs: specsAgg.done || 0,
       pendingSpecs: specsAgg.pending || 0,
+      totalPoints: specsAgg.total_points || 0,
+      donePoints: specsAgg.done_points || 0,
+      pendingPoints: specsAgg.pending_points || 0,
       alexandreActionsCount: alexandreTotal
     };
   }

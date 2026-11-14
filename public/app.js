@@ -236,10 +236,15 @@ function renderKpis(kpis) {
   document.getElementById('kpi-commits-week').innerText = kpis.commits7d.toLocaleString();
   document.getElementById('kpi-commits-24h').innerText = `${kpis.commits24h.toLocaleString()} nas últimas 24h`;
   document.getElementById('kpi-total-specs').innerText = kpis.totalSpecs;
+  const kpiPointsEl = document.getElementById('kpi-total-points');
+  if (kpiPointsEl) {
+    kpiPointsEl.innerText = `${kpis.totalPoints || 0} pts (${kpis.donePoints || 0} entregues)`;
+  }
   document.getElementById('kpi-done-specs').innerText = kpis.doneSpecs;
 
   const pct = kpis.totalSpecs > 0 ? Math.round((kpis.doneSpecs / kpis.totalSpecs) * 100) : 0;
-  document.getElementById('kpi-specs-rate').innerText = `${pct}% concluídas`;
+  const pointsBadge = kpis.totalPoints > 0 ? ` (${kpis.donePoints || 0}/${kpis.totalPoints} pts)` : '';
+  document.getElementById('kpi-specs-rate').innerText = `${pct}% concluídas${pointsBadge}`;
 
   document.getElementById('kpi-alexandre-actions').innerText = kpis.alexandreActionsCount;
   document.getElementById('alexandre-count-badge').innerText = `${kpis.alexandreActionsCount} Pendências`;
@@ -597,10 +602,11 @@ function renderProjectsGrid(projects) {
     let specsBar = '';
     if (p.total_specs > 0) {
       const pct = Math.round((p.done_specs / p.total_specs) * 100);
+      const pointsInfo = p.total_points > 0 ? `<span class="text-[10px] text-indigo-300 font-mono">(${p.done_points || 0}/${p.total_points} pts)</span>` : '';
       specsBar = `
         <div class="mt-3 pt-2.5 border-t border-slate-800/80">
           <div class="flex items-center justify-between text-xs mb-1">
-            <span class="text-slate-400">Specs SDD: <strong class="text-slate-200">${p.done_specs}/${p.total_specs}</strong></span>
+            <span class="text-slate-400">Specs SDD: <strong class="text-slate-200">${p.done_specs}/${p.total_specs}</strong> ${pointsInfo}</span>
             <span class="text-xs font-bold ${pct === 100 ? 'text-emerald-400' : 'text-slate-300'}">${pct}%</span>
           </div>
           <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
@@ -724,8 +730,9 @@ function renderProjectsTable(projects) {
       <span class="text-amber-400 text-[10px] font-bold" title="${p.uncommitted_count} arquivos modificados">⚠️ ${p.uncommitted_count} uncommitted</span>
     ` : `<span class="text-slate-500 text-[10px]">✓ limpa</span>`;
 
+    const pointsText = p.total_points > 0 ? ` <span class="text-[10px] text-indigo-300 font-mono">(${p.done_points || 0}/${p.total_points} pts)</span>` : '';
     const specsInfo = p.total_specs > 0
-      ? `<span class="font-bold text-slate-200">${p.done_specs}/${p.total_specs}</span> <span class="text-[10px] text-emerald-400">(${Math.round((p.done_specs/p.total_specs)*100)}%)</span>`
+      ? `<span class="font-bold text-slate-200">${p.done_specs}/${p.total_specs}</span>${pointsText} <span class="text-[10px] text-emerald-400">(${Math.round((p.done_specs/p.total_specs)*100)}%)</span>`
       : `<span class="text-slate-500">—</span>`;
 
     const lastCommitMsg = p.last_commit_message ? escapeHtml(p.last_commit_message) : 'Sem commits';
@@ -884,7 +891,7 @@ async function openProjectModal(projectName) {
     }
 
     // Specs
-    document.getElementById('modal-specs-count').innerText = p.specs ? p.specs.length : 0;
+    document.getElementById('modal-specs-count').innerText = p.specs ? `${p.specs.length}${p.total_points ? ` (${p.done_points || 0}/${p.total_points} pts)` : ''}` : 0;
     renderSpecsList(p.specs);
 
     // Ações do Alexandre
@@ -995,9 +1002,11 @@ function renderSpecsList(specs) {
     return `
       <div class="p-3.5 bg-slate-950 rounded-xl border border-slate-800 hover:border-slate-700 transition">
         <div class="flex items-center justify-between gap-2 mb-1.5">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
             <code class="text-xs font-mono font-bold text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-500/20">${escapeHtml(s.spec_id)}</code>
             <strong class="text-xs text-white">${escapeHtml(s.spec_name || s.summary || s.spec_id)}</strong>
+            ${s.weight ? `<span class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">Peso ${s.weight}</span>` : ''}
+            ${s.category ? `<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-700">${escapeHtml(s.category)}</span>` : ''}
           </div>
           ${statusBadge}
         </div>
@@ -1271,12 +1280,14 @@ function renderSpotlightPanel(p) {
           }
 
           const arrow = idx < stepper.length - 1 ? `<i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-600 shrink-0"></i>` : '';
+          const weightBadge = step.weight ? `<span class="text-[9px] font-mono font-bold px-1 py-0.5 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-500/30">P${step.weight}</span>` : '';
 
           return `
             <div class="flex items-center gap-1.5">
               <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border ${stepBadgeClass}" title="${escapeHtml(step.title || '')}">
                 <i data-lucide="${stepIcon}" class="w-3 h-3"></i>
                 <span class="font-mono">${escapeHtml(step.id)}</span>
+                ${weightBadge}
                 ${step.status === 'in_progress' ? `<span class="text-[10px] font-bold text-amber-200">(${step.progress}%)</span>` : ''}
               </span>
               ${arrow}
@@ -1442,7 +1453,7 @@ function renderSpotlightPanel(p) {
             </div>
 
             <div>
-              <div class="text-[10px] text-slate-500 font-semibold uppercase mb-1">Stepper de Marcos / Specs</div>
+              <div class="text-[10px] text-slate-500 font-semibold uppercase mb-1">Stepper de Marcos / Specs ${p.total_points > 0 ? `<span class="text-indigo-300 font-mono">(${p.done_points || 0}/${p.total_points} pts)</span>` : ''}</div>
               ${stepperHtml}
             </div>
           </div>
@@ -1485,7 +1496,7 @@ function renderSpotlightPanel(p) {
 
         <div class="pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
           <span>Inatividade: <strong class="text-slate-300">${p.days_since_last_change ?? '-'} dias</strong></span>
-          <span>Specs: <strong class="text-emerald-400">${p.done_specs || 0}</strong> de <strong>${p.total_specs || 0}</strong> concluídas</span>
+          <span>Specs: <strong class="text-emerald-400">${p.done_specs || 0}</strong> de <strong>${p.total_specs || 0}</strong> concluídas ${p.total_points > 0 ? `(<strong class="text-indigo-300 font-mono">${p.done_points || 0}/${p.total_points} pts</strong>)` : ''}</span>
         </div>
       </div>
 

@@ -1,0 +1,491 @@
+{
+  "schema_version": "2.0",
+  "protocol_version": "2.0",
+  "project": {
+    "project_id": "PRJ-app-development-control",
+    "name": "AppDevelopmentControl",
+    "root_path": ".",
+    "status": "active",
+    "migration_status": "migrated",
+    "baseline_at": "2026-11-13T10:00:00-03:00",
+    "last_updated_at": "2026-11-13T10:00:00-03:00",
+    "last_updated_by": "claude"
+  },
+  "summary": {
+    "spec_count": 8,
+    "task_count": null,
+    "status_counts": {
+      "completed": 6,
+      "not_started": 2
+    },
+    "total_points": 37.0,
+    "completed_points_equivalent": 24.0,
+    "remaining_points": 13.0,
+    "original_estimate_hours": 34,
+    "current_estimate_hours": 34,
+    "actual_hours": null,
+    "remaining_estimate_hours": 34,
+    "hours_note": "horas so existem para SPEC-0007/0008 (provisorias); as 6 specs legadas tem horas desconhecidas, nao somadas",
+    "development_percent": 65,
+    "test_validation_percent": 65,
+    "integration_percent": 65,
+    "documentation_percent": 65,
+    "overall_percent": 65,
+    "percent_rule": "ponderado por pontos: 24 de 37",
+    "data_confidence": "medium"
+  },
+  "specs": [
+    {
+      "id": "SPEC-0001",
+      "legacy_ids": [
+        "Spec 001",
+        "SPEC-001",
+        "001"
+      ],
+      "title": "Setup inicial e painel executivo base (AppDevelopmentControl)",
+      "type": "feature",
+      "state": "completed",
+      "category": "finalizadas",
+      "priority": null,
+      "owner": "AGY",
+      "points": 3,
+      "points_confidence": "medium",
+      "points_justification": "Peso Fibonacci ja atribuido na SPECS.md pre-existente (METODO.md 25); mantido na migracao, nao recalibrado.",
+      "hours": {
+        "original": null,
+        "current": null,
+        "actual": null,
+        "remaining": 0,
+        "actual_method": null,
+        "note": "horas nunca medidas; desconhecidas"
+      },
+      "progress": {
+        "development": 100,
+        "test_validation": 100,
+        "integration": 100,
+        "documentation": 100,
+        "overall_rule": "media simples das 4 dimensoes"
+      },
+      "progress_note": null,
+      "evidence": [
+        {
+          "kind": "commit",
+          "ref": "a63bf24",
+          "note": "commit que integrou a entrega (git log)"
+        },
+        {
+          "kind": "doc",
+          "ref": "docs/specs/001-app-development-control/tasks.md",
+          "note": "tarefas da spec"
+        },
+        {
+          "kind": "test",
+          "ref": "test/test_all.mjs",
+          "note": "suite cobre a spec; NAO reexecutada na migracao (sem runners por regra de foco); resultado so por declaracao em STATUS.md/SPECS.md"
+        }
+      ],
+      "blockers": [],
+      "dependencies": [],
+      "source_files": [
+        "docs/specs/001-app-development-control/spec.md",
+        "docs/specs/001-app-development-control/plan.md",
+        "docs/specs/001-app-development-control/tasks.md"
+      ],
+      "migration_status": "preexisting_at_baseline"
+    },
+    {
+      "id": "SPEC-0002",
+      "legacy_ids": [
+        "Spec 002",
+        "SPEC-002",
+        "002"
+      ],
+      "title": "Saude do portfolio, SDD Maturity Score e direcao executiva (SQLite WAL, scanner, servidor LAN)",
+      "type": "feature",
+      "state": "completed",
+      "category": "finalizadas",
+      "priority": null,
+      "owner": "AGY",
+      "points": 5,
+      "points_confidence": "medium",
+      "points_justification": "Peso Fibonacci ja atribuido na SPECS.md pre-existente (METODO.md 25); mantido na migracao, nao recalibrado.",
+      "hours": {
+        "original": null,
+        "current": null,
+        "actual": null,
+        "remaining": 0,
+        "actual_method": null,
+        "note": "horas nunca medidas; desconhecidas"
+      },
+      "progress": {
+        "development": 100,
+        "test_validation": 100,
+        "integration": 100,
+        "documentation": 100,
+        "overall_rule": "media simples das 4 dimensoes"
+      },
+      "progress_note": null,
+      "evidence": [
+        {
+          "kind": "commit",
+          "ref": "7d29c28",
+          "note": "commit que integrou a entrega (git log)"
+        },
+        {
+          "kind": "doc",
+          "ref": "docs/specs/002-portfolio-health-and-direction/tasks.md",
+          "note": "tarefas da spec"
+        },
+        {
+          "kind": "test",
+          "ref": "test/test_all.mjs",
+          "note": "suite cobre a spec; NAO reexecutada na migracao (sem runners por regra de foco); resultado so por declaracao em STATUS.md/SPECS.md"
+        }
+      ],
+      "blockers": [],
+      "dependencies": [],
+      "source_files": [
+        "docs/specs/002-portfolio-health-and-direction/spec.md",
+        "docs/specs/002-portfolio-health-and-direction/plan.md",
+        "docs/specs/002-portfolio-health-and-direction/tasks.md"
+      ],
+      "migration_status": "preexisting_at_baseline"
+    },
+    {
+      "id": "SPEC-0003",
+      "legacy_ids": [
+        "Spec 003",
+        "SPEC-003",
+        "003"
+      ],
+      "title": "Deep Executive Intelligence: stacks, metadados de continuidade, commits recentes, tripla visualizacao",
+      "type": "feature",
+      "state": "completed",
+      "category": "finalizadas",
+      "priority": null,
+      "owner": "AGY",
+      "points": 5,
+      "points_confidence": "medium",
+      "points_justification": "Peso Fibonacci ja atribuido na SPECS.md pre-existente (METODO.md 25); mantido na migracao, nao recalibrado.",
+      "hours": {
+        "original": null,
+        "current": null,
+        "actual": null,
+        "remaining": 0,
+        "actual_method": null,
+        "note": "horas nunca medidas; desconhecidas"
+      },
+      "progress": {
+        "development": 100,
+        "test_validation": 100,
+        "integration": 100,
+        "documentation": 100,
+        "overall_rule": "media simples das 4 dimensoes"
+      },
+      "progress_note": null,
+      "evidence": [
+        {
+          "kind": "commit",
+          "ref": "369b6b4",
+          "note": "commit que integrou a entrega (git log)"
+        },
+        {
+          "kind": "doc",
+          "ref": "docs/specs/003-deep-executive-intelligence/tasks.md",
+          "note": "tarefas da spec"
+        },
+        {
+          "kind": "test",
+          "ref": "test/test_all.mjs",
+          "note": "suite cobre a spec; NAO reexecutada na migracao (sem runners por regra de foco); resultado so por declaracao em STATUS.md/SPECS.md"
+        }
+      ],
+      "blockers": [],
+      "dependencies": [],
+      "source_files": [
+        "docs/specs/003-deep-executive-intelligence/spec.md",
+        "docs/specs/003-deep-executive-intelligence/plan.md",
+        "docs/specs/003-deep-executive-intelligence/tasks.md"
+      ],
+      "migration_status": "preexisting_at_baseline"
+    },
+    {
+      "id": "SPEC-0004",
+      "legacy_ids": [
+        "Spec 004",
+        "SPEC-004",
+        "004"
+      ],
+      "title": "Project Spotlight, seletor rapido, funil de estagios e stepper de specs",
+      "type": "feature",
+      "state": "completed",
+      "category": "finalizadas",
+      "priority": null,
+      "owner": "AGY",
+      "points": 3,
+      "points_confidence": "medium",
+      "points_justification": "Peso Fibonacci ja atribuido na SPECS.md pre-existente (METODO.md 25); mantido na migracao, nao recalibrado.",
+      "hours": {
+        "original": null,
+        "current": null,
+        "actual": null,
+        "remaining": 0,
+        "actual_method": null,
+        "note": "horas nunca medidas; desconhecidas"
+      },
+      "progress": {
+        "development": 100,
+        "test_validation": 100,
+        "integration": 100,
+        "documentation": 100,
+        "overall_rule": "media simples das 4 dimensoes"
+      },
+      "progress_note": null,
+      "evidence": [
+        {
+          "kind": "commit",
+          "ref": "369b6b4",
+          "note": "commit que integrou a entrega (git log)"
+        },
+        {
+          "kind": "doc",
+          "ref": "docs/specs/004-project-spotlight-and-situational-clarity/tasks.md",
+          "note": "tarefas da spec"
+        },
+        {
+          "kind": "test",
+          "ref": "test/test_all.mjs",
+          "note": "suite cobre a spec; NAO reexecutada na migracao (sem runners por regra de foco); resultado so por declaracao em STATUS.md/SPECS.md"
+        }
+      ],
+      "blockers": [],
+      "dependencies": [],
+      "source_files": [
+        "docs/specs/004-project-spotlight-and-situational-clarity/spec.md",
+        "docs/specs/004-project-spotlight-and-situational-clarity/plan.md",
+        "docs/specs/004-project-spotlight-and-situational-clarity/tasks.md"
+      ],
+      "migration_status": "preexisting_at_baseline"
+    },
+    {
+      "id": "SPEC-0005",
+      "legacy_ids": [
+        "Spec 005",
+        "SPEC-005",
+        "005"
+      ],
+      "title": "Veracidade dos dados: binds SQL, falsos positivos de acoes do Alexandre, resiliencia documental",
+      "type": "bugfix",
+      "state": "completed",
+      "category": "finalizadas",
+      "priority": null,
+      "owner": "AGY",
+      "points": 5,
+      "points_confidence": "medium",
+      "points_justification": "Peso Fibonacci ja atribuido na SPECS.md pre-existente (METODO.md 25); mantido na migracao, nao recalibrado.",
+      "hours": {
+        "original": null,
+        "current": null,
+        "actual": null,
+        "remaining": 0,
+        "actual_method": null,
+        "note": "horas nunca medidas; desconhecidas"
+      },
+      "progress": {
+        "development": 100,
+        "test_validation": 100,
+        "integration": 100,
+        "documentation": 100,
+        "overall_rule": "media simples das 4 dimensoes"
+      },
+      "progress_note": null,
+      "evidence": [
+        {
+          "kind": "commit",
+          "ref": "369b6b4",
+          "note": "commit que integrou a entrega (git log)"
+        },
+        {
+          "kind": "doc",
+          "ref": "docs/specs/005-data-truth-and-audit/tasks.md",
+          "note": "tarefas da spec"
+        },
+        {
+          "kind": "test",
+          "ref": "test/test_all.mjs",
+          "note": "suite cobre a spec; NAO reexecutada na migracao (sem runners por regra de foco); resultado so por declaracao em STATUS.md/SPECS.md"
+        }
+      ],
+      "blockers": [],
+      "dependencies": [],
+      "source_files": [
+        "docs/specs/005-data-truth-and-audit/spec.md",
+        "docs/specs/005-data-truth-and-audit/plan.md",
+        "docs/specs/005-data-truth-and-audit/tasks.md"
+      ],
+      "migration_status": "preexisting_at_baseline"
+    },
+    {
+      "id": "SPEC-0006",
+      "legacy_ids": [
+        "Spec 006",
+        "SPEC-006",
+        "006"
+      ],
+      "title": "Ingestao nativa de SPECS.md e pesos de dificuldade (Fibonacci) na dashboard",
+      "type": "feature",
+      "state": "completed",
+      "category": "finalizadas",
+      "priority": null,
+      "owner": "AGY",
+      "points": 3,
+      "points_confidence": "medium",
+      "points_justification": "Peso Fibonacci ja atribuido na SPECS.md pre-existente (METODO.md 25); mantido na migracao, nao recalibrado.",
+      "hours": {
+        "original": null,
+        "current": null,
+        "actual": null,
+        "remaining": 0,
+        "actual_method": null,
+        "note": "horas nunca medidas; desconhecidas"
+      },
+      "progress": {
+        "development": 100,
+        "test_validation": 100,
+        "integration": 100,
+        "documentation": 100,
+        "overall_rule": "media simples das 4 dimensoes"
+      },
+      "progress_note": "tasks.md ainda com 5 caixas [ ] (T1-T4 implementadas no commit 8f20b5e; T5 varredura real/reinicio do servidor sem evidencia): divergencia documental, nao de codigo",
+      "evidence": [
+        {
+          "kind": "commit",
+          "ref": "8f20b5e",
+          "note": "commit que integrou a entrega (git log)"
+        },
+        {
+          "kind": "doc",
+          "ref": "docs/specs/006-ingestao-specs-pesos/tasks.md",
+          "note": "tarefas da spec"
+        },
+        {
+          "kind": "test",
+          "ref": "test/test_all.mjs",
+          "note": "suite cobre a spec; NAO reexecutada na migracao (sem runners por regra de foco); resultado so por declaracao em STATUS.md/SPECS.md"
+        }
+      ],
+      "blockers": [],
+      "dependencies": [],
+      "source_files": [
+        "docs/specs/006-ingestao-specs-pesos/spec.md",
+        "docs/specs/006-ingestao-specs-pesos/plan.md",
+        "docs/specs/006-ingestao-specs-pesos/tasks.md"
+      ],
+      "migration_status": "preexisting_at_baseline"
+    },
+    {
+      "id": "SPEC-0007",
+      "legacy_ids": [],
+      "title": "Dashboard consome docs/production v2: control.json, events.jsonl, baseline, reconstrucao SQLite, validacao de schema, metricas dos 11 e 12 do protocolo",
+      "type": "feature",
+      "state": "not_started",
+      "category": "fila",
+      "priority": "medium",
+      "owner": null,
+      "points": 8,
+      "points_confidence": "low",
+      "points_justification": "PROVISORIO. Varios componentes (leitor de JSON/JSONL, validacao de schema e referencias, deteccao de duplicidade, reconstrucao do SQLite a partir dos arquivos, preservacao de origem/data de importacao, metricas de producao/esforco/previsibilidade/fluxo/bloqueios) sobre um scanner ja grande (src/scanner.js 1238 linhas); comparavel a SPEC-0002/0003 (5) mas com mais componentes e validacoes. Recalibrar na spec/plan.",
+      "hours": {
+        "original": 24,
+        "current": 24,
+        "actual": null,
+        "remaining": 24,
+        "actual_method": null,
+        "note": "estimativa provisoria de esforco ativo, independente dos pontos; confianca low"
+      },
+      "progress": {
+        "development": 0,
+        "test_validation": 0,
+        "integration": 0,
+        "documentation": 0,
+        "overall_rule": "media simples das 4 dimensoes"
+      },
+      "progress_note": "sem spec.md escrita; apenas registro na fila",
+      "evidence": [],
+      "blockers": [],
+      "dependencies": [],
+      "source_files": [
+        "docs/production/SPEC-INDEX.md"
+      ],
+      "acceptance_summary": "Nao implementar agora. Requisitos: ler production-control.json/events.jsonl/baseline por projeto; validar schema 2.0 e referencias; detectar duplicidades; reconstruir SQLite a partir dos arquivos; nunca escrever de volta; sinalizar divergencias; calcular indicadores 11/12 apenas com dados sustentados.",
+      "migration_status": "registered_at_migration"
+    },
+    {
+      "id": "SPEC-0008",
+      "legacy_ids": [],
+      "title": "Testes da ingestao v2: fixtures de control/events validos e invalidos, reconstrucao do SQLite, schema, duplicidade, metricas",
+      "type": "test",
+      "state": "not_started",
+      "category": "fila",
+      "priority": "medium",
+      "owner": null,
+      "points": 5,
+      "points_confidence": "low",
+      "points_justification": "PROVISORIO. Teste de SPEC-0007: fixtures validas e invalidas, casos de borda (JSONL corrompido, ID duplicado, ponto fora de Fibonacci, completed sem evidencia), reconstrucao idempotente; a suite atual (test/test_all.mjs, 11 secoes) e de arquivo unico.",
+      "hours": {
+        "original": 10,
+        "current": 10,
+        "actual": null,
+        "remaining": 10,
+        "actual_method": null,
+        "note": "estimativa provisoria; confianca low"
+      },
+      "progress": {
+        "development": 0,
+        "test_validation": 0,
+        "integration": 0,
+        "documentation": 0,
+        "overall_rule": "media simples das 4 dimensoes"
+      },
+      "progress_note": "depende de SPEC-0007",
+      "evidence": [],
+      "blockers": [],
+      "dependencies": [
+        "SPEC-0007"
+      ],
+      "source_files": [
+        "docs/production/SPEC-INDEX.md"
+      ],
+      "validates": [
+        "SPEC-0007"
+      ],
+      "migration_status": "registered_at_migration"
+    }
+  ],
+  "dependencies": [
+    {
+      "from": "SPEC-0008",
+      "to": "SPEC-0007",
+      "type": "validates"
+    }
+  ],
+  "alerts": [
+    {
+      "severity": "info",
+      "text": "SPEC-0006: tasks.md com caixas [ ] apesar de codigo integrado no commit 8f20b5e; T5 sem evidencia."
+    },
+    {
+      "severity": "info",
+      "text": "Testes nao reexecutados na migracao (sem runners por regra de foco)."
+    }
+  ],
+  "decisions_required": [],
+  "audit": {
+    "last_incremental_audit_at": "2026-11-13T10:00:00-03:00",
+    "last_full_audit_at": "2026-11-13T10:00:00-03:00",
+    "unreconciled_changes": 0,
+    "evidence_coverage_percent": 100
+  },
+  "control_file": "docs/production/production-control.json",
+  "events_file": "docs/production/production-events.jsonl"
+}

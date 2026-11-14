@@ -1,0 +1,32 @@
+{
+  "baseline_at": "2026-11-13T10:00:00-03:00",
+  "agent": "claude",
+  "head_commit": "8f20b5e",
+  "branch": "feature/adotar-protocolo-producao",
+  "package_version": "1.0.0",
+  "counts": {
+    "specs_total": 8,
+    "specs_preexisting": 6,
+    "specs_registered_at_migration": 2,
+    "completed": 6,
+    "fila": 2,
+    "total_points": 37.0,
+    "completed_points": 24.0,
+    "test_sections_in_suite": 11,
+    "src_files": 7
+  },
+  "method": "Inventario de docs/specs/001..006 (spec/plan/tasks), SPECS.md, STATUS.md, AGENT_CONTEXT.md, CHANGELOG.md, git log (4 commits) e leitura de src/db.js, src/scanner.js e test/test_all.mjs. Nenhum codigo alterado; nenhum teste executado.",
+  "limitations": [
+    "Horas reais desconhecidas (null); horas originais das specs legadas desconhecidas.",
+    "Testes nao reexecutados: resultado \"11/11 verde\" e declaracao de STATUS.md/SPECS.md, nao confirmado nesta migracao.",
+    "Commits 369b6b4 agrupa as specs 003, 004 e 005; datas por spec nao separaveis.",
+    "Nao ha tags git no projeto."
+  ],
+  "divergences": [
+    "package.json version 1.0.0 vs SPECS.md \"versao_atual 0.6.0\" vs CHANGELOG topo 2.2.0 (tres versoes distintas).",
+    "SPEC-0006 (Spec 006): tasks.md com 5 caixas [ ] apesar de T1-T4 implementadas no commit 8f20b5e; T5 (varredura real/reinicio do servidor) sem evidencia.",
+    "STATUS.md cita 10/10 suites; test_all.mjs tem 11 secoes e SPECS.md cita 11/11.",
+    "CHANGELOG.md nao tem entrada para a Spec 006.",
+    "Specs 001..005 sem campo Peso no cabecalho do spec.md (pesos so em SPECS.md)."
+  ]
+}

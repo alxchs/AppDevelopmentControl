@@ -200,11 +200,15 @@ export class ProjectScanner {
 
       // Consolidar specs e ações do Alexandre do principal e de todas as worktrees
       const allPathsToScan = [{ path: projectPath, label: 'Principal' }, ...worktrees.map(w => ({ path: w.path, label: w.name }))];
-      const { specs, alexandreActions } = this.consolidateSpecsAndActions(allPathsToScan, name);
+      const { specs, alexandreActions, specsMetrics } = this.consolidateSpecsAndActions(allPathsToScan, name);
 
-      const totalSpecs = specs.length;
-      const doneSpecs = specs.filter(s => s.status === 'done').length;
-      const pendingSpecs = totalSpecs - doneSpecs;
+      const totalSpecs = specsMetrics?.total_specs || specs.length;
+      const doneSpecs = specsMetrics?.finalizadas?.quantidade !== undefined ? specsMetrics.finalizadas.quantidade : specs.filter(s => s.status === 'done').length;
+      const pendingSpecs = Math.max(0, totalSpecs - doneSpecs);
+
+      const totalPoints = specsMetrics?.total_pontos || specs.reduce((acc, s) => acc + (s.weight || 1), 0);
+      const donePoints = specsMetrics?.finalizadas?.pontos !== undefined ? specsMetrics.finalizadas.pontos : specs.filter(s => s.status === 'done').reduce((acc, s) => acc + (s.weight || 1), 0);
+      const pendingPoints = Math.max(0, totalPoints - donePoints);
 
       const projectRecord = {
         name,
@@ -238,6 +242,10 @@ export class ProjectScanner {
         total_specs: totalSpecs,
         done_specs: doneSpecs,
         pending_specs: pendingSpecs,
+        total_points: totalPoints,
+        done_points: donePoints,
+        pending_points: pendingPoints,
+        specs_summary_json: specsMetrics ? JSON.stringify(specsMetrics) : null,
         alexandre_pending_count: alexandreActions.length,
         worktrees_count: enrichedWorktrees.length,
         is_custom: isCustom
@@ -818,10 +826,95 @@ export class ProjectScanner {
     }
   }
 
+  parseSpecsIndex(projectPath) {
+    const specsMasterCandidates = ['docs/specs/SPECS.md', 'SPECS.md', 'docs/SPECS.md'];
+    for (const relSpecs of specsMasterCandidates) {
+      const specsMasterPath = path.join(projectPath, relSpecs);
+      if (fs.existsSync(specsMasterPath)) {
+        try {
+          const masterContent = fs.readFileSync(specsMasterPath, 'utf8');
+          let metrics = null;
+          const jsonMatch = masterContent.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+          if (jsonMatch) {
+            try {
+              const parsed = JSON.parse(jsonMatch[1]);
+              metrics = parsed.metricas || parsed;
+            } catch (e) {}
+          }
+
+          const specs = [];
+          const tableLines = masterContent.split('\n');
+          for (const line of tableLines) {
+            if (line.includes('|')) {
+              const cols = line.split('|').map(c => c.trim()).filter(c => c !== '');
+              if (cols.length >= 4) {
+                const idRaw = cols[0].replace(/[*_`]/g, '').trim();
+                if (/^(ID|#|Spec|Código|---|:---:)/i.test(idRaw)) continue;
+
+                const nameRaw = cols[1].replace(/[*_`]/g, '').trim();
+                const weightRaw = parseInt(cols[2].replace(/[^\d]/g, ''), 10);
+                const weight = (!isNaN(weightRaw) && weightRaw > 0) ? weightRaw : 1;
+                const categoryRaw = cols[3].toLowerCase();
+
+                let status = 'pending';
+                let category = 'fila';
+                if (/finalizad[ao]|concluíd[ao]|done|⚪|✅/i.test(categoryRaw)) {
+                  status = 'done';
+                  category = 'finalizada';
+                } else if (/andamento|wip|progress|🔴|🟦/i.test(categoryRaw)) {
+                  status = 'in_progress';
+                  category = 'em_andamento';
+                } else if (/dependendo|alexandre|mim|🟡|⏳/i.test(categoryRaw)) {
+                  status = 'awaiting_alexandre';
+                  category = 'dependendo_alexandre';
+                } else if (/impedid[ao]|block|bloquead[ao]|⛔/i.test(categoryRaw)) {
+                  status = 'blocked';
+                  category = 'impedida';
+                } else if (/inválid[ao]|descartad[ao]|cancelad[ao]|➖/i.test(categoryRaw)) {
+                  status = 'invalid';
+                  category = 'invalida';
+                }
+
+                specs.push({
+                  id: idRaw,
+                  name: nameRaw,
+                  weight,
+                  category,
+                  status
+                });
+              }
+            }
+          }
+
+          const total_specs = metrics?.total_specs || specs.length;
+          const total_points = metrics?.total_pontos || specs.reduce((acc, s) => acc + (s.weight || 1), 0);
+          const done_specs = metrics?.finalizadas?.qtd || specs.filter(s => s.status === 'done').length;
+          const done_points = metrics?.finalizadas?.pontos || specs.filter(s => s.status === 'done').reduce((acc, s) => acc + (s.weight || 1), 0);
+          const pending_specs = Math.max(0, total_specs - done_specs);
+          const pending_points = Math.max(0, total_points - done_points);
+
+          return {
+            file_path: relSpecs,
+            metrics,
+            specs,
+            total_specs,
+            total_points,
+            done_specs,
+            done_points,
+            pending_specs,
+            pending_points
+          };
+        } catch (e) {}
+      }
+    }
+    return null;
+  }
+
   consolidateSpecsAndActions(pathsToScan, projectName) {
     const specsMap = new Map(); // spec_id -> spec
     const actions = [];
     const seenActionKeys = new Set();
+    let detectedSpecsMetrics = null;
 
     for (const { path: pPath, label } of pathsToScan) {
       // 1. Decisões em caminhos conhecidos (DECISIONS.md, docs/12-decisoes.md, docs/decisoes.md)
@@ -935,6 +1028,7 @@ export class ProjectScanner {
             let summary = '';
             const pendingTasksList = [];
 
+            let specWeight = 1;
             let isApprovedInHeader = false;
 
             if (fs.existsSync(specPath)) {
@@ -942,6 +1036,11 @@ export class ProjectScanner {
                 const specContent = fs.readFileSync(specPath, 'utf8');
                 const titleMatch = specContent.match(/^#\s*(.+)$/m);
                 if (titleMatch) summary = titleMatch[1].trim();
+
+                const pesoMatch = specContent.match(/Peso:\s*(\d+)/i);
+                if (pesoMatch) {
+                  specWeight = parseInt(pesoMatch[1], 10) || 1;
+                }
 
                 // Checa se já foi formalmente aprovada
                 isApprovedInHeader = /Estado:\s*\*\*APROVAD[AO]\*\*|Status:\s*APROVAD[AO]|✅/i.test(specContent);
@@ -1021,10 +1120,13 @@ export class ProjectScanner {
 
             // Não sobrescrever spec existente se já foi concluída no principal
             if (!specsMap.has(specFolder) || (status === 'done' && specsMap.get(specFolder).status !== 'done')) {
+              const prev = specsMap.get(specFolder);
               specsMap.set(specFolder, {
                 spec_id: specFolder,
                 spec_name: summary || specFolder,
                 status,
+                weight: (prev && prev.weight > 1) ? prev.weight : specWeight,
+                category: (prev && prev.category) ? prev.category : (status === 'done' ? 'finalizada' : 'em_andamento'),
                 total_tasks: totalTasks,
                 completed_tasks: completedTasks,
                 pending_tasks: pendingTasks,
@@ -1036,8 +1138,101 @@ export class ProjectScanner {
           }
         } catch (e) {}
       }
+
+      // 5. Ingestão de docs/specs/SPECS.md ou SPECS.md (Mestre de Pesos e Categorias)
+      const specsMasterCandidates = ['docs/specs/SPECS.md', 'SPECS.md', 'docs/SPECS.md'];
+      for (const relSpecs of specsMasterCandidates) {
+        const specsMasterPath = path.join(pPath, relSpecs);
+        if (fs.existsSync(specsMasterPath)) {
+          try {
+            const masterContent = fs.readFileSync(specsMasterPath, 'utf8');
+            // Bloco JSON estruturado
+            const jsonMatch = masterContent.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+            if (jsonMatch) {
+              try {
+                const parsedJson = JSON.parse(jsonMatch[1]);
+                if (parsedJson && parsedJson.metricas) {
+                  if (!detectedSpecsMetrics || (parsedJson.metricas.total_specs || 0) >= (detectedSpecsMetrics.total_specs || 0)) {
+                    detectedSpecsMetrics = parsedJson.metricas;
+                  }
+                }
+              } catch (e) {}
+            }
+
+            // Tabela Mestra de Specs (ex: | **Q08** | Nome | 2 | ⚪ Finalizada | ...)
+            const tableLines = masterContent.split('\n');
+            for (const line of tableLines) {
+              if (line.includes('|')) {
+                const cols = line.split('|').map(c => c.trim()).filter(c => c !== '');
+                if (cols.length >= 4) {
+                  const idRaw = cols[0].replace(/[*_`]/g, '').trim();
+                  if (/^(ID|#|Spec|Código|---|:---:)/i.test(idRaw)) continue;
+
+                  const nameRaw = cols[1].replace(/[*_`]/g, '').trim();
+                  const weightRaw = parseInt(cols[2].replace(/[^\d]/g, ''), 10);
+                  const weight = (!isNaN(weightRaw) && weightRaw > 0) ? weightRaw : 1;
+                  const categoryRaw = cols[3].toLowerCase();
+
+                  let status = 'pending';
+                  let category = 'fila';
+                  if (/finalizad[ao]|concluíd[ao]|done|⚪|✅/i.test(categoryRaw)) {
+                    status = 'done';
+                    category = 'finalizada';
+                  } else if (/andamento|wip|progress|🔴|🟦/i.test(categoryRaw)) {
+                    status = 'in_progress';
+                    category = 'em_andamento';
+                  } else if (/dependendo|alexandre|mim|🟡|⏳/i.test(categoryRaw)) {
+                    status = 'awaiting_alexandre';
+                    category = 'dependendo_alexandre';
+                  } else if (/impedid[ao]|block|bloquead[ao]|⛔/i.test(categoryRaw)) {
+                    status = 'blocked';
+                    category = 'impedida';
+                  } else if (/inválid[ao]|descartad[ao]|cancelad[ao]|➖/i.test(categoryRaw)) {
+                    status = 'invalid';
+                    category = 'invalida';
+                  }
+
+                  // Normaliza o spec_id (tanto exato quanto compatível com pastas)
+                  const cleanId = idRaw;
+                  let matchedKey = null;
+                  for (const key of specsMap.keys()) {
+                    if (key.toLowerCase() === cleanId.toLowerCase() ||
+                        key.toLowerCase().startsWith(cleanId.toLowerCase() + '-') ||
+                        cleanId.toLowerCase().startsWith(key.toLowerCase() + '-')) {
+                      matchedKey = key;
+                      break;
+                    }
+                  }
+
+                  if (matchedKey) {
+                    const existing = specsMap.get(matchedKey);
+                    existing.weight = weight;
+                    existing.category = category;
+                    if (status === 'done') existing.status = 'done';
+                    else if (existing.status !== 'done' && status === 'in_progress') existing.status = 'in_progress';
+                  } else {
+                    specsMap.set(cleanId, {
+                      spec_id: cleanId,
+                      spec_name: nameRaw || cleanId,
+                      status,
+                      weight,
+                      category,
+                      total_tasks: 0,
+                      completed_tasks: status === 'done' ? 1 : 0,
+                      pending_tasks: status === 'done' ? 0 : 1,
+                      pending_tasks_json: [],
+                      summary: nameRaw,
+                      source_worktree: label !== 'Principal' ? label : null
+                    });
+                  }
+                }
+              }
+            }
+          } catch (e) {}
+        }
+      }
     }
 
-    return { specs: Array.from(specsMap.values()), alexandreActions: actions };
+    return { specs: Array.from(specsMap.values()), alexandreActions: actions, specsMetrics: detectedSpecsMetrics };
   }
 }
