@@ -851,8 +851,10 @@ async function openProjectModal(projectName) {
     document.getElementById('modal-next-action').innerText = p.next_action || 'Nenhuma próxima ação imediata documentada';
 
     // Saúde e SDD
-    const healthBadge = document.getElementById('modal-health-badge');
-    healthBadge.outerHTML = getHealthBadge(p.health_status, p.health_reason);
+    const healthBadgeContainer = document.getElementById('modal-health-badge-container') || document.getElementById('modal-health-badge');
+    if (healthBadgeContainer) {
+      healthBadgeContainer.innerHTML = getHealthBadge(p.health_status, p.health_reason);
+    }
     document.getElementById('modal-health-reason').innerText = p.health_reason || 'Sem diagnóstico de saúde.';
     document.getElementById('modal-last-agent').innerText = p.last_agent ? `• Último agente: ${p.last_agent}` : '';
 
