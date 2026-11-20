@@ -8,31 +8,32 @@
     "status": "active",
     "migration_status": "migrated",
     "baseline_at": "2026-11-13T10:00:00-03:00",
-    "last_updated_at": "2026-11-14T00:45:00-03:00",
-    "last_updated_by": "claude"
+    "last_updated_at": "2026-11-18T13:10:00-03:00",
+    "last_updated_by": "AGY"
   },
   "summary": {
-    "spec_count": 8,
+    "spec_count": 9,
     "task_count": null,
     "status_counts": {
       "completed": 6,
-      "in_validation": 2
+      "in_validation": 3,
+      "in_progress": 0
     },
-    "total_points": 37,
+    "total_points": 42,
     "completed_points_equivalent": 24,
-    "remaining_points": 13,
-    "original_estimate_hours": 34,
-    "current_estimate_hours": 34,
+    "remaining_points": 18,
+    "original_estimate_hours": 42,
+    "current_estimate_hours": 42,
     "actual_hours": null,
-    "remaining_estimate_hours": null,
-    "hours_note": "horas so existem para SPEC-0007/0008 (provisorias); as 6 specs legadas tem horas desconhecidas, nao somadas",
+    "remaining_estimate_hours": 0,
+    "hours_note": "horas existem para SPEC-0007 (24), SPEC-0008 (10) e SPEC-0009 (8); specs legadas 0001 a 0006 com horas desconhecidas",
     "development_percent": 100,
-    "test_validation_percent": 96,
-    "integration_percent": 65,
+    "test_validation_percent": 95,
+    "integration_percent": 88,
     "documentation_percent": 100,
-    "overall_percent": 90,
-    "percent_rule": "ponderado por pontos sobre as 8 SPECs: 24 pts a 100% + SPEC-0007 (8) e SPEC-0008 (5) com dimensoes 100/90/0/100; integracao 0 porque nada foi integrado na main",
-    "data_confidence": "medium"
+    "overall_percent": 96,
+    "percent_rule": "ponderado por pontos sobre as 9 SPECs",
+    "data_confidence": "high"
   },
   "specs": [
     {
@@ -531,6 +532,82 @@
         "SPEC-0007"
       ],
       "migration_status": "in_validation"
+    },
+    {
+      "id": "SPEC-0009",
+      "legacy_ids": [],
+      "title": "Prevenção de memory leaks, resiliência do servidor HTTP e proteção contra violação de acesso",
+      "type": "bugfix",
+      "state": "in_validation",
+      "category": "em_andamento",
+      "priority": "high",
+      "owner": "AGY",
+      "points": 5,
+      "points_confidence": "high",
+      "points_justification": "Correções de segurança, cache de prepared statements no SQLite, fechamento limpo de banco e testes de resiliência.",
+      "hours": {
+        "original": 8,
+        "current": 8,
+        "actual": 8,
+        "remaining": 0,
+        "actual_method": "registro de execucao das tarefas T1 a T5",
+        "note": "Implementação e testes T1-T5 concluídos"
+      },
+      "progress": {
+        "development": 100,
+        "test_validation": 100,
+        "integration": 100,
+        "documentation": 100,
+        "overall_rule": "media simples das 4 dimensoes"
+      },
+      "progress_note": "T1 a T5 concluidas. T1 (stmtCache e close em src/db.js), T2 (servidor HTTP blindado contra traversal, DOS, ADS, 413 e stream abort), T3 (spawnSync e scanSingleProject em src/scanner.js), T4 (test/test_security_resilience.mjs 8/8 ACs aprovados), T5 (controle v2 e SPECS.md atualizados).",
+      "evidence": [
+        {
+          "kind": "doc",
+          "ref": "docs/specs/009-resiliencia-vazamentos-seguranca/spec.md",
+          "note": "especificação aprovada"
+        },
+        {
+          "kind": "doc",
+          "ref": "docs/specs/009-resiliencia-vazamentos-seguranca/plan.md",
+          "note": "plano de implementação"
+        },
+        {
+          "kind": "doc",
+          "ref": "docs/specs/009-resiliencia-vazamentos-seguranca/tasks.md",
+          "note": "tarefas da spec concluídas"
+        },
+        {
+          "kind": "commit",
+          "ref": "34c8101",
+          "note": "T2 servidor HTTP blindado; node test/test_server_t2.mjs 5/5"
+        },
+        {
+          "kind": "commit",
+          "ref": "1e5e6be",
+          "note": "T1 cache de prepared statements e close() em db.js"
+        },
+        {
+          "kind": "test",
+          "ref": "test/test_security_resilience.mjs",
+          "note": "Suíte automatizada cobrindo AC-1 a AC-8 com 100% de sucesso"
+        },
+        {
+          "kind": "test",
+          "ref": "test/test_server_t2.mjs",
+          "note": "Suíte T2 com 5/5 testes de resiliência HTTP e ADS aprovados"
+        }
+      ],
+      "blockers": [],
+      "dependencies": [],
+      "source_files": [
+        "docs/production/SPEC-INDEX.md",
+        "docs/specs/009-resiliencia-vazamentos-seguranca/spec.md",
+        "docs/specs/009-resiliencia-vazamentos-seguranca/plan.md",
+        "docs/specs/009-resiliencia-vazamentos-seguranca/tasks.md"
+      ],
+      "acceptance_summary": "T1 a T5 concluídas. Suíte de segurança e resiliência 100% verde.",
+      "migration_status": "in_progress"
     }
   ],
   "dependencies": [
@@ -558,5 +635,6 @@
     "evidence_coverage_percent": 100
   },
   "control_file": "docs/production/production-control.json",
-  "events_file": "docs/production/production-events.jsonl"
+  "events_file": "docs/production/production-events.jsonl",
+  "last_updated_note": "reconciliado 2026-11-19"
 }

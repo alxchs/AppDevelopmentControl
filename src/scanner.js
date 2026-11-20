@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { computeHealthStatus, computeSddMaturityScore } from './evaluator.js';
 import { readProductionControl, mapToLegacy, computeProductionMetrics } from './production.js';
 
@@ -17,6 +17,31 @@ export class ProjectScanner {
     this.db = db;
     this.baseDir = baseDir;
     this.nowIso = opts.now || (() => new Date().toISOString()); // relogio injetavel (testes deterministicos)
+  }
+
+  safeGit(args, cwd) {
+    try {
+      const res = spawnSync('git', args, {
+        cwd,
+        encoding: 'utf8',
+        env: GIT_ENV,
+        maxBuffer: 10 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'ignore']
+      });
+      return res.status === 0 ? (res.stdout || '').trim() : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  scanSingleProject(projectPath, label, isCustom = false) {
+    const name = label || path.basename(projectPath);
+    return this.scanCanonicalProject({
+      name,
+      path: projectPath,
+      worktrees: [],
+      isCustom
+    });
   }
 
   scanAll() {
@@ -621,12 +646,7 @@ export class ProjectScanner {
   extractRecentCommits(projectPath, limit = 5) {
     const commits = [];
     try {
-      const out = execSync(`git log -n ${limit} --format="%H|%h|%an|%ae|%aI|%ar|%s"`, {
-        cwd: projectPath,
-        encoding: 'utf8',
-        env: GIT_ENV,
-        stdio: ['ignore', 'pipe', 'ignore']
-      }).trim();
+      const out = this.safeGit(['log', '-n', String(limit), '--format=%H|%h|%an|%ae|%aI|%ar|%s'], projectPath);
 
       if (out) {
         const lines = out.split('\n').filter(l => l.trim());
@@ -661,12 +681,7 @@ export class ProjectScanner {
 
   checkWorkingTreeStatus(projectPath) {
     try {
-      const out = execSync('git status --porcelain', {
-        cwd: projectPath,
-        encoding: 'utf8',
-        env: GIT_ENV,
-        stdio: ['ignore', 'pipe', 'ignore']
-      }).trim();
+      const out = this.safeGit(['status', '--porcelain'], projectPath);
 
       if (!out) {
         return { is_clean: true, uncommitted_count: 0 };
@@ -698,43 +713,24 @@ export class ProjectScanner {
 
     try {
       try {
-        const remote = execSync('git config --get remote.origin.url', {
-          cwd: projectPath,
-          encoding: 'utf8',
-          env: GIT_ENV,
-          stdio: ['ignore', 'pipe', 'ignore']
-        }).trim();
+        const remote = this.safeGit(['config', '--get', 'remote.origin.url'], projectPath);
         if (remote) metrics.github_url = remote;
       } catch (e) {}
 
       // Tags
       try {
-        const tag = execSync('git describe --tags --abbrev=0', {
-          cwd: projectPath,
-          encoding: 'utf8',
-          env: GIT_ENV,
-          stdio: ['ignore', 'pipe', 'ignore']
-        }).trim();
+        const tag = this.safeGit(['describe', '--tags', '--abbrev=0'], projectPath);
         if (tag) {
           metrics.last_tag = tag;
           try {
-            const tagDate = execSync(`git log -1 --format=%aI ${tag}`, {
-              cwd: projectPath,
-              encoding: 'utf8',
-              env: GIT_ENV,
-              stdio: ['ignore', 'pipe', 'ignore']
-            }).trim();
+            const tagDate = this.safeGit(['log', '-1', '--format=%aI', tag], projectPath);
             if (tagDate) metrics.last_tag_date = tagDate;
           } catch (e) {}
         }
       } catch (e) {
         try {
-          const tagList = execSync('git tag --sort=-creatordate', {
-            cwd: projectPath,
-            encoding: 'utf8',
-            env: GIT_ENV,
-            stdio: ['ignore', 'pipe', 'ignore']
-          }).trim().split('\n').filter(t => t.trim());
+          const tagListOut = this.safeGit(['tag', '--sort=-creatordate'], projectPath);
+          const tagList = tagListOut ? tagListOut.split('\n').filter(t => t.trim()) : [];
           if (tagList.length > 0) {
             metrics.last_tag = tagList[0].trim();
           }
@@ -743,12 +739,7 @@ export class ProjectScanner {
 
       // Último agente / autor relevante
       try {
-        const recentAuthors = execSync('git log -n 5 --format="%an %s"', {
-          cwd: projectPath,
-          encoding: 'utf8',
-          env: GIT_ENV,
-          stdio: ['ignore', 'pipe', 'ignore']
-        });
+        const recentAuthors = this.safeGit(['log', '-n', '5', '--format=%an %s'], projectPath);
         if (/claude/i.test(recentAuthors)) {
           metrics.last_agent = 'Claude';
         } else if (/antigravity|agy/i.test(recentAuthors)) {
@@ -761,23 +752,13 @@ export class ProjectScanner {
       } catch (e) {}
 
       try {
-        const first = execSync('git log --reverse --format=%aI -n 1', {
-          cwd: projectPath,
-          encoding: 'utf8',
-          env: GIT_ENV,
-          stdio: ['ignore', 'pipe', 'ignore']
-        }).trim();
+        const first = this.safeGit(['log', '--reverse', '--format=%aI', '-n', '1'], projectPath);
         if (first) metrics.created_local = first;
       } catch (e) {}
 
       if (metrics.github_url) {
         try {
-          const remoteFirst = execSync('git log --reverse --format=%aI origin/main -n 1', {
-            cwd: projectPath,
-            encoding: 'utf8',
-            env: GIT_ENV,
-            stdio: ['ignore', 'pipe', 'ignore']
-          }).trim();
+          const remoteFirst = this.safeGit(['log', '--reverse', '--format=%aI', 'origin/main', '-n', '1'], projectPath);
           if (remoteFirst) metrics.created_github = remoteFirst;
         } catch (e) {
           metrics.created_github = metrics.created_local;
@@ -785,12 +766,7 @@ export class ProjectScanner {
       }
 
       try {
-        const lastOut = execSync('git log -n 1 --format=%aI%x1f%s', {
-          cwd: projectPath,
-          encoding: 'utf8',
-          env: GIT_ENV,
-          stdio: ['ignore', 'pipe', 'ignore']
-        }).trim();
+        const lastOut = this.safeGit(['log', '-n', '1', '--format=%aI%x1f%s'], projectPath);
         if (lastOut) {
           const parts = lastOut.split('\x1f');
           metrics.last_commit_date = parts[0] || null;
@@ -799,12 +775,7 @@ export class ProjectScanner {
       } catch (e) {}
 
       try {
-        const allTimestampsStr = execSync('git log --format=%at', {
-          cwd: projectPath,
-          encoding: 'utf8',
-          env: GIT_ENV,
-          stdio: ['ignore', 'pipe', 'ignore']
-        }).trim();
+        const allTimestampsStr = this.safeGit(['log', '--format=%at'], projectPath);
 
         if (allTimestampsStr) {
           const rawList = allTimestampsStr.split('\n')

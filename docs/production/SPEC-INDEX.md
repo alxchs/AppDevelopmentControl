@@ -12,6 +12,7 @@
 | SPEC-0006 | Spec 006, SPEC-006, 006 | feature | completed | finalizadas | 3 (medium) | null | preexisting_at_baseline | `006-ingestao-specs-pesos` |
 | SPEC-0007 | — | feature | in_validation | em_andamento | 8 (low) | 24/24 | in_validation | `007-ingestao-producao-v2` |
 | SPEC-0008 | — | test | in_validation | em_andamento | 5 (low) | 10/10 | in_validation | `008-testes-ingestao-v2` |
+| SPEC-0009 | — | bugfix | in_validation | em_andamento | 5 (high) | 8/8 | in_validation | `009-resiliencia-vazamentos-seguranca` |
 
-SPEC-0007 e SPEC-0008 têm SDD aprovado e foram implementadas na branch `feature/ingestao-producao-v2` (em validação: falta abrir a Dashboard e usar o painel; sem merge na main).
+SPEC-0007, SPEC-0008 e SPEC-0009 têm SDD aprovado e foram implementadas (em validação). SPEC-0009 implementada na branch `feature/resiliencia-vazamentos-seguranca`.
 

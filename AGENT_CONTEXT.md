@@ -5,10 +5,10 @@ Estado atual, curto. Atualize ao mudar de fase/tarefa (METODO.md §1).
 ```text
 PROJECT        AppDevelopmentControl (Executive Projects Dashboard & Control for Local LAN)
 OBJECTIVE      Painel executivo de alta profundidade técnica, monitoramento de portfólio, governança de IA e rastreabilidade na LAN
-CURRENT PHASE  SPEC-0007/0008 (ingestão do controle de produção v2) implementadas e EM VALIDAÇÃO
-CURRENT BRANCH feature/ingestao-producao-v2 (worktree C:\desenv\utils\AppDevelopmentControl-v2; sem push, sem merge)
-LAST DECISION  Incorporada regra §25 no METODO.md e AGENTS.md; criado template C:\Users\alxch\.dev-method\templates\specs.md; atualizado Novo-Projeto.ps1; gerado docs/specs/SPECS.md no AppDevelopmentControl com 5 specs finalizadas (21 pts) e Spec 006 em fila
-NEXT ACTION    Abrir a Dashboard e usar o selo/painel (só depois das 23:59 ou com o Alexandre longe, sem roubar foco); depois, /merge pelo Alexandre
+CURRENT PHASE  OPERAÇÃO / EVOLUÇÃO (Specs 001 a 009 integradas na main)
+CURRENT BRANCH main
+LAST DECISION  SPEC-0009 integrada na main; branches remotas e locais unificadas e limpas
+NEXT ACTION    Manter monitoramento de c:\desenv\utils
 BLOCKER        Nenhum
-LAST UPDATE    2026-11-14 — Claude (T7 a T12 da SPEC-0007 e testes da SPEC-0008; handoff 2026-11-14_0050_claude_ingestao-producao-v2.md)
+LAST UPDATE    2026-11-20 — AGY (Unificação de branches e integração da SPEC-0009 na main a pedido do Alexandre)
 ```

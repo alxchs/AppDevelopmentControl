@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "scan": "node src/cli-scan.js",
-    "test": "node test/test_all.mjs && node test/test_production_v2.mjs"
+    "test": "node test/test_all.mjs && node test/test_production_v2.mjs && node test/test_security_resilience.mjs"
   },
   "keywords": [
     "dashboard",

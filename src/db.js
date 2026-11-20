@@ -11,7 +11,27 @@ export class AppDb {
   constructor(customPath = null) {
     this.dbPath = customPath || this.resolveDbPath();
     this.db = new DatabaseSync(this.dbPath);
+    this.stmtCache = new Map();
     this.init();
+  }
+
+  prepareCached(sql) {
+    let stmt = this.stmtCache.get(sql);
+    if (!stmt) {
+      stmt = this.db.prepare(sql);
+      this.stmtCache.set(sql, stmt);
+    }
+    return stmt;
+  }
+
+  close() {
+    this.stmtCache.clear();
+    if (this.db) {
+      try {
+        this.db.close();
+      } catch (e) {}
+      this.db = null;
+    }
   }
 
   resolveDbPath() {
@@ -400,9 +420,9 @@ export class AppDb {
   }
 
   saveRecentCommits(projectName, commits) {
-    this.db.prepare('DELETE FROM project_recent_commits WHERE project_name = ?').run(projectName);
+    this.prepareCached('DELETE FROM project_recent_commits WHERE project_name = ?').run(projectName);
     if (!commits || commits.length === 0) return;
-    const stmt = this.db.prepare(`
+    const stmt = this.prepareCached(`
       INSERT OR REPLACE INTO project_recent_commits (
         project_name, hash, short_hash, author_name, agent, date_iso, date_relative, message
       ) VALUES (
@@ -424,7 +444,7 @@ export class AppDb {
   }
 
   getRecentCommits(projectName, limit = 5) {
-    return this.db.prepare(`
+    return this.prepareCached(`
       SELECT * FROM project_recent_commits
       WHERE project_name = ?
       ORDER BY date_iso DESC
@@ -433,8 +453,8 @@ export class AppDb {
   }
 
   saveWorktrees(projectName, worktrees) {
-    this.db.prepare('DELETE FROM project_worktrees WHERE project_name = ?').run(projectName);
-    const stmt = this.db.prepare(`
+    this.prepareCached('DELETE FROM project_worktrees WHERE project_name = ?').run(projectName);
+    const stmt = this.prepareCached(`
       INSERT INTO project_worktrees (project_name, name, path, branch, last_modified)
       VALUES (@project_name, @name, @path, @branch, @last_modified)
     `);
@@ -450,12 +470,12 @@ export class AppDb {
   }
 
   setSpecsSource(projectName, source) {
-    this.db.prepare('UPDATE projects SET specs_source = ? WHERE name = ?').run(source, projectName);
+    this.prepareCached('UPDATE projects SET specs_source = ? WHERE name = ?').run(source, projectName);
   }
 
   saveSpecs(projectName, specs) {
-    this.db.prepare('DELETE FROM project_specs WHERE project_name = ?').run(projectName);
-    const stmt = this.db.prepare(`
+    this.prepareCached('DELETE FROM project_specs WHERE project_name = ?').run(projectName);
+    const stmt = this.prepareCached(`
       INSERT INTO project_specs (
         project_name, spec_id, spec_name, status, weight, category, total_tasks, completed_tasks, pending_tasks, pending_tasks_json, summary, source_worktree
       ) VALUES (
@@ -545,7 +565,7 @@ export class AppDb {
 
   // Resumo aditivo da producao v2 para /api/projects (FR-017): sempre presente; sem importacao = status 'absent'.
   getProductionSummary(projectName, specsSource = null) {
-    const imp = this.db.prepare('SELECT * FROM production_imports WHERE project_name = ?').get(projectName);
+    const imp = this.prepareCached('SELECT * FROM production_imports WHERE project_name = ?').get(projectName);
     const parse = (v) => { try { return v == null ? null : JSON.parse(v); } catch (e) { return null; } };
     if (!imp) {
       return { source: specsSource || null, status: 'absent', source_kind: null, imported_at: null, declared_updated_at: null, last_good_at: null, issue_counts: { info: 0, warning: 0, error: 0 }, metrics: null };
@@ -564,17 +584,17 @@ export class AppDb {
 
   // Detalhe da producao v2 de um projeto (origem, importacao, specs, problemas, eventos). null se nunca importado.
   getProductionDetail(projectName) {
-    const imp = this.db.prepare('SELECT * FROM production_imports WHERE project_name = ?').get(projectName);
+    const imp = this.prepareCached('SELECT * FROM production_imports WHERE project_name = ?').get(projectName);
     if (!imp) return null;
     const parse = (v) => { try { return v == null ? null : JSON.parse(v); } catch (e) { return null; } };
-    const specs = this.db.prepare('SELECT * FROM production_specs WHERE project_name = ? ORDER BY spec_id ASC').all(projectName).map((s) => ({
+    const specs = this.prepareCached('SELECT * FROM production_specs WHERE project_name = ? ORDER BY spec_id ASC').all(projectName).map((s) => ({
       ...s,
       progress: parse(s.progress_json),
       dependencies: parse(s.dependencies_json) || [],
       blockers: parse(s.blockers_json) || []
     }));
-    const issues = this.db.prepare('SELECT code, severity, entity_id, file, line, message FROM production_issues WHERE project_name = ? ORDER BY id ASC').all(projectName);
-    const eventCount = this.db.prepare('SELECT COUNT(*) AS n FROM production_events WHERE project_name = ?').get(projectName).n;
+    const issues = this.prepareCached('SELECT code, severity, entity_id, file, line, message FROM production_issues WHERE project_name = ? ORDER BY id ASC').all(projectName);
+    const eventCount = this.prepareCached('SELECT COUNT(*) AS n FROM production_events WHERE project_name = ?').get(projectName)?.n ?? 0;
     return {
       import: {
         project_name: imp.project_name,
@@ -598,8 +618,8 @@ export class AppDb {
   }
 
   saveAlexandreActions(projectName, actions) {
-    this.db.prepare('DELETE FROM alexandre_actions WHERE project_name = ?').run(projectName);
-    const stmt = this.db.prepare(`
+    this.prepareCached('DELETE FROM alexandre_actions WHERE project_name = ?').run(projectName);
+    const stmt = this.prepareCached(`
       INSERT INTO alexandre_actions (project_name, spec_id, file_path, title, snippet, source_worktree, detected_at)
       VALUES (@project_name, @spec_id, @file_path, @title, @snippet, @source_worktree, @detected_at)
     `);
@@ -682,11 +702,11 @@ export class AppDb {
   }
 
   getAllProjects() {
-    const projects = this.db.prepare('SELECT * FROM projects ORDER BY name ASC').all();
+    const projects = this.prepareCached('SELECT * FROM projects ORDER BY name ASC').all();
     for (const p of projects) {
-      p.worktrees = this.db.prepare('SELECT * FROM project_worktrees WHERE project_name = ? ORDER BY name ASC').all(p.name);
-      p.recent_commits = this.db.prepare('SELECT * FROM project_recent_commits WHERE project_name = ? ORDER BY date_iso DESC LIMIT 5').all(p.name);
-      const rawSpecs = this.db.prepare('SELECT * FROM project_specs WHERE project_name = ? ORDER BY spec_id ASC').all(p.name);
+      p.worktrees = this.prepareCached('SELECT * FROM project_worktrees WHERE project_name = ? ORDER BY name ASC').all(p.name);
+      p.recent_commits = this.prepareCached('SELECT * FROM project_recent_commits WHERE project_name = ? ORDER BY date_iso DESC LIMIT 5').all(p.name);
+      const rawSpecs = this.prepareCached('SELECT * FROM project_specs WHERE project_name = ? ORDER BY spec_id ASC').all(p.name);
       p.stepper = this.buildStepper(rawSpecs);
 
       if (p.specs_summary_json && typeof p.specs_summary_json === 'string') {
@@ -704,17 +724,17 @@ export class AppDb {
   }
 
   getProjectByName(name) {
-    const project = this.db.prepare('SELECT * FROM projects WHERE name = ?').get(name);
+    const project = this.prepareCached('SELECT * FROM projects WHERE name = ?').get(name);
     if (!project) return null;
-    project.worktrees = this.db.prepare('SELECT * FROM project_worktrees WHERE project_name = ? ORDER BY name ASC').all(name);
-    project.specs = this.db.prepare('SELECT * FROM project_specs WHERE project_name = ? ORDER BY spec_id ASC').all(name);
+    project.worktrees = this.prepareCached('SELECT * FROM project_worktrees WHERE project_name = ? ORDER BY name ASC').all(name);
+    project.specs = this.prepareCached('SELECT * FROM project_specs WHERE project_name = ? ORDER BY spec_id ASC').all(name);
     for (const s of project.specs) {
       if (s.pending_tasks_json && typeof s.pending_tasks_json === 'string') {
         try { s.pending_tasks = JSON.parse(s.pending_tasks_json); } catch (e) {}
       }
     }
     project.stepper = this.buildStepper(project.specs);
-    project.alexandre_actions = this.db.prepare('SELECT * FROM alexandre_actions WHERE project_name = ?').all(name);
+    project.alexandre_actions = this.prepareCached('SELECT * FROM alexandre_actions WHERE project_name = ?').all(name);
     project.recent_commits = this.getRecentCommits(name, 5);
     if (project.specs_summary_json && typeof project.specs_summary_json === 'string') {
       try { project.specs_summary = JSON.parse(project.specs_summary_json); } catch (e) {}
@@ -730,7 +750,7 @@ export class AppDb {
   }
 
   getAllAlexandreActions() {
-    return this.db.prepare(`
+    return this.prepareCached(`
       SELECT a.*, p.path as project_path
       FROM alexandre_actions a
       JOIN projects p ON a.project_name = p.name
@@ -739,14 +759,14 @@ export class AppDb {
   }
 
   getKpis() {
-    const totalProjects = this.db.prepare('SELECT COUNT(*) as count FROM projects').get().count;
-    const totalWorktrees = this.db.prepare('SELECT COUNT(*) as count FROM project_worktrees').get().count;
-    const activeProjectsMonth = this.db.prepare('SELECT COUNT(*) as count FROM projects WHERE changes_30d > 0').get().count;
-    const totalCommits = this.db.prepare('SELECT SUM(changes_total) as sum FROM projects').get().sum || 0;
-    const commits24h = this.db.prepare('SELECT SUM(changes_24h) as sum FROM projects').get().sum || 0;
-    const commits7d = this.db.prepare('SELECT SUM(changes_7d) as sum FROM projects').get().sum || 0;
-    const commits30d = this.db.prepare('SELECT SUM(changes_30d) as sum FROM projects').get().sum || 0;
-    const specsAgg = this.db.prepare(`
+    const totalProjects = this.prepareCached('SELECT COUNT(*) as count FROM projects').get()?.count ?? 0;
+    const totalWorktrees = this.prepareCached('SELECT COUNT(*) as count FROM project_worktrees').get()?.count ?? 0;
+    const activeProjectsMonth = this.prepareCached('SELECT COUNT(*) as count FROM projects WHERE changes_30d > 0').get()?.count ?? 0;
+    const totalCommits = this.prepareCached('SELECT SUM(changes_total) as sum FROM projects').get()?.sum || 0;
+    const commits24h = this.prepareCached('SELECT SUM(changes_24h) as sum FROM projects').get()?.sum || 0;
+    const commits7d = this.prepareCached('SELECT SUM(changes_7d) as sum FROM projects').get()?.sum || 0;
+    const commits30d = this.prepareCached('SELECT SUM(changes_30d) as sum FROM projects').get()?.sum || 0;
+    const specsAgg = this.prepareCached(`
       SELECT
         SUM(total_specs) as total,
         SUM(done_specs) as done,
@@ -755,8 +775,8 @@ export class AppDb {
         SUM(done_points) as done_points,
         SUM(pending_points) as pending_points
       FROM projects
-    `).get();
-    const alexandreTotal = this.db.prepare('SELECT COUNT(*) as count FROM alexandre_actions').get().count;
+    `).get() || {};
+    const alexandreTotal = this.prepareCached('SELECT COUNT(*) as count FROM alexandre_actions').get()?.count ?? 0;
 
     return {
       totalProjects,
@@ -780,7 +800,7 @@ export class AppDb {
     if (!query || !query.trim()) return [];
     try {
       const formatted = query.trim().split(/\s+/).map(w => `"${w}"*`).join(' OR ');
-      return this.db.prepare(`
+      return this.prepareCached(`
         SELECT p.*, f.rank
         FROM projects_fts f
         JOIN projects p ON f.project_name = p.name
@@ -793,11 +813,11 @@ export class AppDb {
   }
 
   getMonitoredPaths() {
-    return this.db.prepare('SELECT * FROM monitored_paths').all();
+    return this.prepareCached('SELECT * FROM monitored_paths').all();
   }
 
   addMonitoredPath(pathStr, label = '') {
-    this.db.prepare(`
+    this.prepareCached(`
       INSERT OR IGNORE INTO monitored_paths (path, label, created_at)
       VALUES (?, ?, ?)
     `).run(pathStr, label, new Date().toISOString());
