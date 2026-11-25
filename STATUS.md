@@ -1,6 +1,13 @@
 # Status do Projeto — AppDevelopmentControl
 
 ## O que está PRONTO e FUNCIONANDO
+- **Clareza Real, Limpeza e Profissionalização LAN (SPEC-0010)** — EM VALIDAÇÃO (`feature/claude-imports`, `npm test` 4/4 suítes verdes):
+  - Correção `/api/rescan` → `/api/scan` e `404` JSON para qualquer `/api/*` inexistente.
+  - Fim do falso `done` em `spec.md` apenas aprovada; `buildStepper` sem mangling `FSPEC-`; sinais de `production_v2` integrados no farol de saúde.
+  - Visibilidade de alterações não commitadas em worktrees (`worktree_dirty_count`) e detector de divergências docs vs Git (`divergence_alerts`).
+  - Snapshots diários (`portfolio_snapshots`, `GET /api/snapshots`), auto-scan em background (`GET /api/status`) e trava de raízes autorizadas em `POST /api/projects/register`.
+  - Frontend 100% offline na LAN (`public/vendor/` com Tailwind, Lucide e Chart.js locais), toasts sem `alert()`, event delegation, e ordenação por Prioridade Executiva.
+  - Limpeza de código morto (`parseSpecsIndex`, `.spin`, 28 `ALTER TABLE` cegos substituídos por `PRAGMA user_version`) e remoção de `test/temp-close-1795281550577.db` e `debug.log`.
 - **Ingestão do controle de produção v2 (SPEC-0007) e sua suíte (SPEC-0008)** — EM VALIDAÇÃO, branch `feature/ingestao-producao-v2` (sem push, sem merge na main). Estado por critério de aceite: `docs/agents/handoffs/2026-11-14_0050_claude_ingestao-producao-v2.md`.
   - *Leitura somente leitura* de `docs/production/` (control, eventos, baseline) de cada projeto, sem nunca escrever neles; erro isolado por projeto (CONFIRMED: `npm test`, testes AC-14/AC-21/AC-22 e hash de pasta).
   - *Validação* de schema, valores (pontos Fibonacci, datas, percentuais), referências, duplicidades, ciclos, eventos (linha corrompida, repetido, de outro projeto, órfão) e declarado x calculado.

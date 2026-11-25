@@ -251,19 +251,19 @@ console.log(' -> OK: Parâmetros SQL, ausência de falsos positivos e decisões/
 // 11. Testes da Spec 006 (Controle de Pesos de Dificuldade e SPECS.md)
 console.log('\n[11/11] Testando Especificação 006: Ingestão de SPECS.md e Pesos de Dificuldade...');
 
-// Ingestão de SPECS.md no AppDevelopmentControl
-const adcSpecsControl = scanner.parseSpecsIndex('c:\\desenv\\utils\\AppDevelopmentControl');
-assert(adcSpecsControl !== null, 'AppDevelopmentControl deve possuir SPECS.md');
-assert(adcSpecsControl.total_specs >= 5, 'AppDevelopmentControl deve conter pelo menos 5 specs no índice');
-assert(adcSpecsControl.total_points >= 20, 'AppDevelopmentControl deve conter pontuação de specs calculada');
-console.log(` -> OK: SPECS.md de AppDevelopmentControl ingerido com ${adcSpecsControl.total_specs} specs e ${adcSpecsControl.total_points} pontos.`);
+// Ingestão de SPECS.md no AppDevelopmentControl via consolidateSpecsAndActions
+const adcConsolidated = scanner.consolidateSpecsAndActions([{ path: 'c:\\desenv\\utils\\AppDevelopmentControl', label: 'Principal' }], 'AppDevelopmentControl');
+assert(adcConsolidated.specsMetrics !== null, 'AppDevelopmentControl deve possuir SPECS.md');
+assert(adcConsolidated.specsMetrics.total_specs >= 5, 'AppDevelopmentControl deve conter pelo menos 5 specs no índice');
+assert(adcConsolidated.specsMetrics.total_pontos >= 20, 'AppDevelopmentControl deve conter pontuação de specs calculada');
+console.log(` -> OK: SPECS.md de AppDevelopmentControl ingerido com ${adcConsolidated.specsMetrics.total_specs} specs e ${adcConsolidated.specsMetrics.total_pontos} pontos.`);
 
 // Ingestão de SPECS.md no Vivere
-const vivereSpecsControl = scanner.parseSpecsIndex('c:\\desenv\\utils\\Vivere');
-if (vivereSpecsControl) {
-  assert(vivereSpecsControl.total_specs > 40, 'Vivere deve conter mais de 40 specs no índice');
-  assert(vivereSpecsControl.total_points > 100, 'Vivere deve conter mais de 100 pontos');
-  console.log(` -> OK: SPECS.md do Vivere ingerido com ${vivereSpecsControl.total_specs} specs e ${vivereSpecsControl.total_points} pontos.`);
+const vivereConsolidated = scanner.consolidateSpecsAndActions([{ path: 'c:\\desenv\\utils\\Vivere', label: 'Principal' }], 'Vivere');
+if (vivereConsolidated.specsMetrics) {
+  assert(vivereConsolidated.specsMetrics.total_specs > 40, 'Vivere deve conter mais de 40 specs no índice');
+  assert(vivereConsolidated.specsMetrics.total_pontos > 100, 'Vivere deve conter mais de 100 pontos');
+  console.log(` -> OK: SPECS.md do Vivere ingerido com ${vivereConsolidated.specsMetrics.total_specs} specs e ${vivereConsolidated.specsMetrics.total_pontos} pontos.`);
 }
 
 // Stepper com peso e categoria

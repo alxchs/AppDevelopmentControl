@@ -5,10 +5,10 @@ Estado atual, curto. Atualize ao mudar de fase/tarefa (METODO.md §1).
 ```text
 PROJECT        AppDevelopmentControl (Executive Projects Dashboard & Control for Local LAN)
 OBJECTIVE      Painel executivo de alta profundidade técnica, monitoramento de portfólio, governança de IA e rastreabilidade na LAN
-CURRENT PHASE  OPERAÇÃO / EVOLUÇÃO (Specs 001 a 009 integradas na main)
-CURRENT BRANCH main
-LAST DECISION  SPEC-0009 integrada na main; branches remotas e locais unificadas e limpas
-NEXT ACTION    Manter monitoramento de c:\desenv\utils
+CURRENT PHASE  SPEC-0010 em validação (clareza real, limpeza, snapshots, auto-scan e frontend 100% offline)
+CURRENT BRANCH feature/claude-imports
+LAST DECISION  SPEC-0010 implementada e validada com npm test (4 suites verdes)
+NEXT ACTION    Validar visualmente a dashboard no navegador e integrar na main quando autorizado
 BLOCKER        Nenhum
-LAST UPDATE    2026-11-20 — AGY (Unificação de branches e integração da SPEC-0009 na main a pedido do Alexandre)
+LAST UPDATE    2026-11-25 — AGY (SPEC-0010 implementada; npm test 100% verde)
 ```

@@ -8,20 +8,20 @@
     "status": "active",
     "migration_status": "migrated",
     "baseline_at": "2026-11-13T10:00:00-03:00",
-    "last_updated_at": "2026-11-18T13:10:00-03:00",
+    "last_updated_at": "2026-11-25T18:25:00-03:00",
     "last_updated_by": "AGY"
   },
   "summary": {
-    "spec_count": 9,
+    "spec_count": 10,
     "task_count": null,
     "status_counts": {
       "completed": 6,
-      "in_validation": 3,
+      "in_validation": 4,
       "in_progress": 0
     },
-    "total_points": 42,
+    "total_points": 50,
     "completed_points_equivalent": 24,
-    "remaining_points": 18,
+    "remaining_points": 26,
     "original_estimate_hours": 42,
     "current_estimate_hours": 42,
     "actual_hours": null,
@@ -608,6 +608,60 @@
       ],
       "acceptance_summary": "T1 a T5 concluídas. Suíte de segurança e resiliência 100% verde.",
       "migration_status": "in_progress"
+    },
+    {
+      "id": "SPEC-0010",
+      "legacy_ids": [],
+      "title": "Clareza real do portfolio, limpeza de codigo morto, snapshots, auto-scan e frontend 100% offline na LAN",
+      "type": "feature",
+      "state": "in_validation",
+      "category": "em_andamento",
+      "priority": "high",
+      "owner": "AGY",
+      "points": 8,
+      "points_confidence": "high",
+      "points_justification": "Peso 8 por envolver backend (db, scanner, evaluator, server), modularizacao offline do frontend e desacoplamento da suite de testes.",
+      "hours": {
+        "original": null,
+        "current": null,
+        "actual": null,
+        "remaining": null,
+        "actual_method": null,
+        "note": "horas nao estimadas previamente"
+      },
+      "progress": {
+        "development": 100,
+        "test_validation": 100,
+        "integration": 90,
+        "documentation": 100,
+        "overall_rule": "media simples das 4 dimensoes"
+      },
+      "progress_note": "T1 a T6 concluidas. npm test 100% verde (test_all, test_production_v2, test_security_resilience, test_clarity_spec10). Aguarda apenas validacao visual no navegador e merge para main.",
+      "evidence": [
+        {
+          "kind": "doc",
+          "ref": "docs/specs/010-clarity-and-professionalization/spec.md",
+          "note": "especificacao aprovada pelo Alexandre"
+        },
+        {
+          "kind": "doc",
+          "ref": "docs/specs/010-clarity-and-professionalization/plan.md",
+          "note": "plano tecnico"
+        },
+        {
+          "kind": "doc",
+          "ref": "docs/specs/010-clarity-and-professionalization/tasks.md",
+          "note": "lista de tarefas T1-T6"
+        }
+      ],
+      "blockers": [],
+      "dependencies": [],
+      "source_files": [
+        "docs/specs/010-clarity-and-professionalization/spec.md",
+        "docs/specs/010-clarity-and-professionalization/plan.md",
+        "docs/specs/010-clarity-and-professionalization/tasks.md"
+      ],
+      "migration_status": "native_v2"
     }
   ],
   "dependencies": [

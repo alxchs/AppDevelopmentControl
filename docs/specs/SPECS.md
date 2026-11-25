@@ -14,20 +14,20 @@ Escala e referências em [../production/estimation-reference.md](../production/e
 {
   "projeto": "AppDevelopmentControl",
   "versao_atual": "1.0.0 (package.json)",
-  "data_extracao": "2026-11-18",
+  "data_extracao": "2026-11-25",
   "fonte": "docs/production/production-control.json",
   "metricas": {
-    "total_specs": 9,
-    "total_pontos": 42,
+    "total_specs": 10,
+    "total_pontos": 50,
     "finalizadas": {
       "quantidade": 6,
       "pontos": 24,
-      "percentual": 57.1
+      "percentual": 48.0
     },
     "em_andamento": {
-      "quantidade": 3,
-      "pontos": 18,
-      "percentual": 42.9
+      "quantidade": 4,
+      "pontos": 26,
+      "percentual": 52.0
     },
     "fila": {
       "quantidade": 0,
@@ -55,13 +55,13 @@ Escala e referências em [../production/estimation-reference.md](../production/e
 
 | Categoria | Quantidade | Pontos | % dos pontos |
 |:---|:---:|:---:|:---:|
-| ⚪ Finalizadas | 6 | 24 | 57.1% |
-| 🔴 Em Andamento | 3 | 18 | 42.9% |
+| ⚪ Finalizadas | 6 | 24 | 48% |
+| 🔴 Em Andamento | 4 | 26 | 52% |
 | 🟢 Fila | 0 | 0 | 0% |
 | 🟡 Dependendo de mim / Alexandre | 0 | 0 | 0% |
 | ⛔ Impedidas | 0 | 0 | 0% |
 | ➖ Inválidas / Descartadas | 0 | 0 | 0% |
-| **TOTAL** | **9** | **42** | **100%** |
+| **TOTAL** | **10** | **50** | **100%** |
 
 ## 3. Agrupamento Detalhado
 
@@ -73,10 +73,11 @@ Escala e referências em [../production/estimation-reference.md](../production/e
 - **SPEC-0005** (Peso 5) — Veracidade dos dados: binds SQL, falsos positivos de acoes do Alexandre, resiliencia documental
 - **SPEC-0006** (Peso 3) — Ingestao nativa de SPECS.md e pesos de dificuldade (Fibonacci) na dashboard
 
-### 🔴 Em Andamento (3 specs · 18 pontos)
+### 🔴 Em Andamento (4 specs · 26 pontos)
 - **SPEC-0007** (Peso 8) — Dashboard consome docs/production v2: control.json, events.jsonl, baseline, reconstrucao SQLite, validacao de schema, metricas dos 11 e 12 do protocolo
 - **SPEC-0008** (Peso 5) — Testes da ingestao v2: fixtures de control/events validos e invalidos, reconstrucao do SQLite, schema, duplicidade, metricas
 - **SPEC-0009** (Peso 5) — Prevenção de memory leaks, resiliência do servidor HTTP e proteção contra violação de acesso
+- **SPEC-0010** (Peso 8) — Clareza real do portfolio, limpeza de codigo morto, snapshots, auto-scan e frontend 100% offline na LAN
 
 ### 🟢 Fila (0 specs · 0 pontos)
 *(nenhuma)*
@@ -103,4 +104,5 @@ Escala e referências em [../production/estimation-reference.md](../production/e
 | **SPEC-0007** | Dashboard consome docs/production v2: control.json, events.jsonl, baseline, reconstrucao SQLite, validacao de schema, metricas dos 11 e 12 do protocolo | 8 | 🔴 Em Andamento | claude | `fa23af1` |
 | **SPEC-0008** | Testes da ingestao v2: fixtures de control/events validos e invalidos, reconstrucao do SQLite, schema, duplicidade, metricas | 5 | 🔴 Em Andamento | claude | `8abb739` |
 | **SPEC-0009** | Prevenção de memory leaks, resiliência do servidor HTTP e proteção contra violação de acesso | 5 | 🔴 Em Andamento | AGY | `34c8101` |
+| **SPEC-0010** | Clareza real do portfolio, limpeza de codigo morto, snapshots, auto-scan e frontend 100% offline na LAN | 8 | 🔴 Em Andamento | AGY | — |
 

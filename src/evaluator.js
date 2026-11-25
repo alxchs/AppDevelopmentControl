@@ -6,14 +6,30 @@
  * Tons: 'emerald' (Em Tração), 'amber' (Bloqueado / Atenção / Em Risco), 'slate' (Estável / Concluído), 'indigo' (Em Incubação)
  */
 export function computeHealthStatus(p) {
-  // 1. Bloqueado / Atenção (Prioridade Máxima de Decisão)
-  if (p.alexandre_pending_count > 0) {
+  // 1. Bloqueado / Atenção (Prioridade Máxima de Decisão ou Controle v2 Rejeitado)
+  if (p.alexandre_pending_count > 0 || (p.prod_awaiting_alexandre_points || 0) > 0) {
+    const count = p.alexandre_pending_count || 0;
+    const pts = p.prod_awaiting_alexandre_points || 0;
     return {
       status: 'blocked',
       label: 'Bloqueado / Atenção',
       tone: 'amber',
       badgeClass: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
-      reason: `${p.alexandre_pending_count} decisão/ação do Alexandre pendente`
+      reason: count > 0
+        ? `${count} decisão/ação do Alexandre pendente`
+        : `${pts} pts aguardando deliberação do Alexandre`
+    };
+  }
+
+  if (p.prod_status === 'rejected' || (p.prod_blocked_points || 0) > 0) {
+    return {
+      status: 'blocked',
+      label: 'Bloqueado / Atenção',
+      tone: 'amber',
+      badgeClass: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
+      reason: p.prod_status === 'rejected'
+        ? 'Controle de produção v2 rejeitado (erro de schema)'
+        : `${p.prod_blocked_points} pts impedidos no controle v2`
     };
   }
 
@@ -39,14 +55,16 @@ export function computeHealthStatus(p) {
     };
   }
 
-  // 4. Em Tração (Ativo recentemente com commits e specs em andamento)
-  if (p.changes_7d > 0 || (p.changes_30d >= 5 && p.days_since_last_change <= 14)) {
+  // 4. Em Tração (Ativo recentemente com commits, worktrees sujas ou specs em andamento)
+  if (p.changes_7d > 0 || (p.changes_30d >= 5 && p.days_since_last_change <= 14) || (p.worktree_dirty_count || 0) > 0) {
     return {
       status: 'active',
       label: 'Em Tração',
       tone: 'emerald',
       badgeClass: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
-      reason: `${p.changes_7d} commits nos últimos 7d (${p.changes_30d} no mês)`
+      reason: p.changes_7d > 0
+        ? `${p.changes_7d} commits nos últimos 7d (${p.changes_30d} no mês)`
+        : `${p.worktree_dirty_count} alterações ativas em worktrees`
     };
   }
 

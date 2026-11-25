@@ -98,9 +98,12 @@ export class AppDb {
         last_decision TEXT,
         worktree_clean INTEGER DEFAULT 1,
         uncommitted_count INTEGER DEFAULT 0,
+        worktree_dirty_count INTEGER DEFAULT 0,
+        divergence_alerts_json TEXT,
         doc_health TEXT,
         pipeline_stage TEXT DEFAULT 'idle',
         commands TEXT,
+        specs_source TEXT,
         last_scanned_at TEXT,
         is_custom INTEGER DEFAULT 0
       );
@@ -111,6 +114,7 @@ export class AppDb {
         name TEXT NOT NULL,
         path TEXT NOT NULL,
         branch TEXT,
+        uncommitted_count INTEGER DEFAULT 0,
         last_modified TEXT,
         UNIQUE(project_name, path)
       );
@@ -163,6 +167,19 @@ export class AppDb {
         created_at TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+        date TEXT PRIMARY KEY,
+        total_projects INTEGER DEFAULT 0,
+        active_projects INTEGER DEFAULT 0,
+        total_specs INTEGER DEFAULT 0,
+        done_specs INTEGER DEFAULT 0,
+        total_points REAL DEFAULT 0,
+        done_points REAL DEFAULT 0,
+        alexandre_actions INTEGER DEFAULT 0,
+        dirty_projects INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+
       CREATE VIRTUAL TABLE IF NOT EXISTS projects_fts USING fts5(
         project_name,
         purpose,
@@ -173,36 +190,66 @@ export class AppDb {
       );
     `);
 
-    // Migrações incrementais de colunas
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN total_points INTEGER DEFAULT 0'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN done_points INTEGER DEFAULT 0'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN pending_points INTEGER DEFAULT 0'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN specs_summary_json TEXT'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE project_specs ADD COLUMN weight INTEGER DEFAULT 1'); } catch (e) {}
-    try { this.db.exec("ALTER TABLE project_specs ADD COLUMN category TEXT DEFAULT 'pending'"); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN worktrees_count INTEGER DEFAULT 0'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE project_specs ADD COLUMN source_worktree TEXT'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE project_specs ADD COLUMN pending_tasks_json TEXT'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE alexandre_actions ADD COLUMN source_worktree TEXT'); } catch (e) {}
-    try { this.db.exec("ALTER TABLE projects ADD COLUMN health_status TEXT DEFAULT 'incubating'"); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN health_reason TEXT'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN sdd_score INTEGER DEFAULT 0'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN last_tag TEXT'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN last_tag_date TEXT'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN last_agent TEXT'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN stack TEXT'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN current_phase TEXT'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN next_action TEXT'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN last_decision TEXT'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN worktree_clean INTEGER DEFAULT 1'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN uncommitted_count INTEGER DEFAULT 0'); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN doc_health TEXT'); } catch (e) {}
-    try { this.db.exec("ALTER TABLE projects ADD COLUMN pipeline_stage TEXT DEFAULT 'idle'"); } catch (e) {}
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN commands TEXT'); } catch (e) {}
-    // Origem dos numeros de specs do projeto (SPEC-0007 AC-1/AC-3): production_v2 | production_v2_worktree | specs_md | none
-    try { this.db.exec('ALTER TABLE projects ADD COLUMN specs_source TEXT'); } catch (e) {}
-
+    this.migrateSchema();
     this.initProductionTables();
+  }
+
+  // Migracao versionada via PRAGMA user_version: evita rodar dezenas de ALTER TABLE a cada boot.
+  migrateSchema() {
+    const version = this.db.prepare('PRAGMA user_version').get()?.user_version ?? 0;
+    if (version >= 2) return;
+
+    const ensureColumns = (table, cols) => {
+      const existing = new Set(this.db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name));
+      for (const [name, def] of cols) {
+        if (!existing.has(name)) {
+          this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${def}`);
+        }
+      }
+    };
+
+    ensureColumns('projects', [
+      ['total_points', 'INTEGER DEFAULT 0'],
+      ['done_points', 'INTEGER DEFAULT 0'],
+      ['pending_points', 'INTEGER DEFAULT 0'],
+      ['specs_summary_json', 'TEXT'],
+      ['worktrees_count', 'INTEGER DEFAULT 0'],
+      ['health_status', "TEXT DEFAULT 'incubating'"],
+      ['health_reason', 'TEXT'],
+      ['sdd_score', 'INTEGER DEFAULT 0'],
+      ['last_tag', 'TEXT'],
+      ['last_tag_date', 'TEXT'],
+      ['last_agent', 'TEXT'],
+      ['stack', 'TEXT'],
+      ['current_phase', 'TEXT'],
+      ['next_action', 'TEXT'],
+      ['last_decision', 'TEXT'],
+      ['worktree_clean', 'INTEGER DEFAULT 1'],
+      ['uncommitted_count', 'INTEGER DEFAULT 0'],
+      ['worktree_dirty_count', 'INTEGER DEFAULT 0'],
+      ['divergence_alerts_json', 'TEXT'],
+      ['doc_health', 'TEXT'],
+      ['pipeline_stage', "TEXT DEFAULT 'idle'"],
+      ['commands', 'TEXT'],
+      ['specs_source', 'TEXT']
+    ]);
+
+    ensureColumns('project_specs', [
+      ['weight', 'INTEGER DEFAULT 1'],
+      ['category', "TEXT DEFAULT 'pending'"],
+      ['source_worktree', 'TEXT'],
+      ['pending_tasks_json', 'TEXT']
+    ]);
+
+    ensureColumns('alexandre_actions', [
+      ['source_worktree', 'TEXT']
+    ]);
+
+    ensureColumns('project_worktrees', [
+      ['uncommitted_count', 'INTEGER DEFAULT 0']
+    ]);
+
+    this.db.exec('PRAGMA user_version = 2');
   }
 
   // Tabelas da ingestao de docs/production v2 (SPEC-0007). Base DERIVADA e reconstruivel: so os arquivos do
@@ -299,7 +346,7 @@ export class AppDb {
       purposeToSave = existing.purpose;
     }
 
-    const stmt = this.db.prepare(`
+    const stmt = this.prepareCached(`
       INSERT INTO projects (
         name, path, type, purpose, purpose_source, has_git,
         created_local, created_github, github_url,
@@ -310,7 +357,8 @@ export class AppDb {
         total_points, done_points, pending_points, specs_summary_json,
         alexandre_pending_count, worktrees_count,
         health_status, health_reason, sdd_score, last_tag, last_tag_date, last_agent,
-        stack, current_phase, next_action, last_decision, worktree_clean, uncommitted_count, doc_health,
+        stack, current_phase, next_action, last_decision, worktree_clean, uncommitted_count,
+        worktree_dirty_count, divergence_alerts_json, doc_health,
         pipeline_stage, commands,
         last_scanned_at, is_custom
       ) VALUES (
@@ -323,7 +371,8 @@ export class AppDb {
         @total_points, @done_points, @pending_points, @specs_summary_json,
         @alexandre_pending_count, @worktrees_count,
         @health_status, @health_reason, @sdd_score, @last_tag, @last_tag_date, @last_agent,
-        @stack, @current_phase, @next_action, @last_decision, @worktree_clean, @uncommitted_count, @doc_health,
+        @stack, @current_phase, @next_action, @last_decision, @worktree_clean, @uncommitted_count,
+        @worktree_dirty_count, @divergence_alerts_json, @doc_health,
         @pipeline_stage, @commands,
         @last_scanned_at, @is_custom
       )
@@ -365,6 +414,8 @@ export class AppDb {
         last_decision = excluded.last_decision,
         worktree_clean = excluded.worktree_clean,
         uncommitted_count = excluded.uncommitted_count,
+        worktree_dirty_count = excluded.worktree_dirty_count,
+        divergence_alerts_json = excluded.divergence_alerts_json,
         doc_health = excluded.doc_health,
         pipeline_stage = excluded.pipeline_stage,
         commands = excluded.commands,
@@ -411,6 +462,8 @@ export class AppDb {
       last_decision: p.last_decision || null,
       worktree_clean: p.worktree_clean !== undefined ? (p.worktree_clean ? 1 : 0) : 1,
       uncommitted_count: p.uncommitted_count || 0,
+      worktree_dirty_count: p.worktree_dirty_count || 0,
+      divergence_alerts_json: Array.isArray(p.divergence_alerts) ? JSON.stringify(p.divergence_alerts) : (p.divergence_alerts_json || null),
       doc_health: typeof p.doc_health === 'object' ? JSON.stringify(p.doc_health) : (p.doc_health || null),
       pipeline_stage: p.pipeline_stage || 'idle',
       commands: typeof p.commands === 'object' ? JSON.stringify(p.commands) : (p.commands || null),
@@ -455,8 +508,8 @@ export class AppDb {
   saveWorktrees(projectName, worktrees) {
     this.prepareCached('DELETE FROM project_worktrees WHERE project_name = ?').run(projectName);
     const stmt = this.prepareCached(`
-      INSERT INTO project_worktrees (project_name, name, path, branch, last_modified)
-      VALUES (@project_name, @name, @path, @branch, @last_modified)
+      INSERT INTO project_worktrees (project_name, name, path, branch, uncommitted_count, last_modified)
+      VALUES (@project_name, @name, @path, @branch, @uncommitted_count, @last_modified)
     `);
     for (const w of worktrees) {
       stmt.run({
@@ -464,6 +517,7 @@ export class AppDb {
         name: w.name,
         path: w.path,
         branch: w.branch || 'main',
+        uncommitted_count: w.uncommitted_count || 0,
         last_modified: w.last_modified || new Date().toISOString()
       });
     }
@@ -674,7 +728,17 @@ export class AppDb {
 
   buildStepper(specs) {
     if (!specs || specs.length === 0) return [];
-    return specs.slice(-4).map(s => {
+    let selected = specs;
+    if (specs.length > 4) {
+      const activeOrBlocked = specs.filter(s => s.status !== 'done' && s.status !== 'invalid');
+      const doneOnes = specs.filter(s => s.status === 'done');
+      if (activeOrBlocked.length > 0 && activeOrBlocked.length <= 4) {
+        selected = [...doneOnes.slice(-(4 - activeOrBlocked.length)), ...activeOrBlocked];
+      } else {
+        selected = specs.slice(-4);
+      }
+    }
+    return selected.map(s => {
       const total = s.total_tasks || 0;
       const completed = s.completed_tasks || 0;
       const pct = total > 0 ? Math.round((completed / total) * 100) : (s.progress !== undefined ? s.progress : (s.status === 'done' ? 100 : 0));
@@ -684,7 +748,10 @@ export class AppDb {
       } else if (Array.isArray(s.pending_tasks)) {
         pendingTasks = s.pending_tasks;
       }
-      const formattedId = s.spec_id.startsWith('F') ? s.spec_id : `F${s.spec_id.replace(/^0+/, '').padStart(3, '0')}`;
+      const rawId = String(s.spec_id || '');
+      const formattedId = (/^(F|SPEC|Q|ADR|BUG)-?\d+/i.test(rawId) || !/^\d+$/.test(rawId))
+        ? rawId
+        : `F${rawId.replace(/^0+/, '').padStart(3, '0')}`;
       return {
         id: formattedId,
         spec_id: s.spec_id,
@@ -701,6 +768,17 @@ export class AppDb {
     });
   }
 
+  _hydrateProjectJsonFields(p) {
+    const parse = (v, fallback = null) => {
+      if (!v || typeof v !== 'string') return v ?? fallback;
+      try { return JSON.parse(v); } catch (e) { return fallback; }
+    };
+    if (p.specs_summary_json) p.specs_summary = parse(p.specs_summary_json);
+    if (p.doc_health) p.doc_health = parse(p.doc_health);
+    if (p.commands) p.commands = parse(p.commands, []);
+    p.divergence_alerts = parse(p.divergence_alerts_json, []);
+  }
+
   getAllProjects() {
     const projects = this.prepareCached('SELECT * FROM projects ORDER BY name ASC').all();
     for (const p of projects) {
@@ -708,16 +786,7 @@ export class AppDb {
       p.recent_commits = this.prepareCached('SELECT * FROM project_recent_commits WHERE project_name = ? ORDER BY date_iso DESC LIMIT 5').all(p.name);
       const rawSpecs = this.prepareCached('SELECT * FROM project_specs WHERE project_name = ? ORDER BY spec_id ASC').all(p.name);
       p.stepper = this.buildStepper(rawSpecs);
-
-      if (p.specs_summary_json && typeof p.specs_summary_json === 'string') {
-        try { p.specs_summary = JSON.parse(p.specs_summary_json); } catch (e) {}
-      }
-      if (p.doc_health && typeof p.doc_health === 'string') {
-        try { p.doc_health = JSON.parse(p.doc_health); } catch (e) {}
-      }
-      if (p.commands && typeof p.commands === 'string') {
-        try { p.commands = JSON.parse(p.commands); } catch (e) {}
-      }
+      this._hydrateProjectJsonFields(p);
       p.production = this.getProductionSummary(p.name, p.specs_source);
     }
     return projects;
@@ -736,15 +805,7 @@ export class AppDb {
     project.stepper = this.buildStepper(project.specs);
     project.alexandre_actions = this.prepareCached('SELECT * FROM alexandre_actions WHERE project_name = ?').all(name);
     project.recent_commits = this.getRecentCommits(name, 5);
-    if (project.specs_summary_json && typeof project.specs_summary_json === 'string') {
-      try { project.specs_summary = JSON.parse(project.specs_summary_json); } catch (e) {}
-    }
-    if (project.doc_health && typeof project.doc_health === 'string') {
-      try { project.doc_health = JSON.parse(project.doc_health); } catch (e) {}
-    }
-    if (project.commands && typeof project.commands === 'string') {
-      try { project.commands = JSON.parse(project.commands); } catch (e) {}
-    }
+    this._hydrateProjectJsonFields(project);
     project.production = this.getProductionSummary(name, project.specs_source);
     return project;
   }
@@ -821,5 +882,49 @@ export class AppDb {
       INSERT OR IGNORE INTO monitored_paths (path, label, created_at)
       VALUES (?, ?, ?)
     `).run(pathStr, label, new Date().toISOString());
+  }
+
+  saveDailySnapshot(nowIso = new Date().toISOString()) {
+    const dateKey = nowIso.slice(0, 10);
+    const kpis = this.getKpis();
+    const dirtyProjects = this.prepareCached(
+      'SELECT COUNT(*) AS count FROM projects WHERE worktree_clean = 0 OR worktree_dirty_count > 0'
+    ).get()?.count ?? 0;
+
+    this.prepareCached(`
+      INSERT INTO portfolio_snapshots (
+        date, total_projects, active_projects, total_specs, done_specs,
+        total_points, done_points, alexandre_actions, dirty_projects, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(date) DO UPDATE SET
+        total_projects = excluded.total_projects,
+        active_projects = excluded.active_projects,
+        total_specs = excluded.total_specs,
+        done_specs = excluded.done_specs,
+        total_points = excluded.total_points,
+        done_points = excluded.done_points,
+        alexandre_actions = excluded.alexandre_actions,
+        dirty_projects = excluded.dirty_projects,
+        created_at = excluded.created_at
+    `).run(
+      dateKey,
+      kpis.totalProjects,
+      kpis.activeProjectsMonth,
+      kpis.totalSpecs,
+      kpis.doneSpecs,
+      kpis.totalPoints,
+      kpis.donePoints,
+      kpis.alexandreActionsCount,
+      dirtyProjects,
+      nowIso
+    );
+  }
+
+  getSnapshots(limit = 30) {
+    return this.prepareCached(`
+      SELECT * FROM portfolio_snapshots
+      ORDER BY date DESC
+      LIMIT ?
+    `).all(limit).reverse();
   }
 }

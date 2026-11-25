@@ -10,6 +10,21 @@ const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.resolve(path.join(__dirname, '..', 'public'));
 const PORT = parseInt(process.env.PORT || '3333', 10);
 const DOS_DEVICE_RE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+const DEFAULT_ALLOWED_ROOTS = (process.env.ADC_ALLOWED_ROOTS || 'c:\\desenv')
+  .split(';')
+  .map(r => path.resolve(r.trim()))
+  .filter(Boolean);
+const AUTO_SCAN_INTERVAL_MS = parseInt(process.env.ADC_AUTOSCAN_MS || String(10 * 60 * 1000), 10);
+
+function isPathWithinAllowedRoots(targetPath, allowedRoots) {
+  const resolved = path.resolve(targetPath);
+  const norm = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  return allowedRoots.some(root => {
+    const r = process.platform === 'win32' ? path.resolve(root).toLowerCase() : path.resolve(root);
+    const withSep = r.endsWith(path.sep) ? r : r + path.sep;
+    return norm === r || norm.startsWith(withSep);
+  });
+}
 
 // Banco e scanner padrao so nascem quando preciso (importar este modulo nao abre o banco real); testes injetam os seus.
 let defaultDeps = null;
@@ -129,6 +144,37 @@ function serveStaticFile(res, filePath, fallbackToIndex = true) {
 // Servidor HTTP
 export function createServer(deps = {}) {
   let resolvedDeps = deps.db ? { db: deps.db, scanner: deps.scanner || { scanAll: () => [], scanSingleProject: () => null } } : null;
+  const allowedRoots = (deps.allowedRoots || DEFAULT_ALLOWED_ROOTS).map(r => path.resolve(r));
+  const scanState = {
+    isScanning: false,
+    lastScanAt: null,
+    lastScanDurationMs: null,
+    lastScanCount: null,
+    lastScanError: null
+  };
+
+  function runScan(scanner) {
+    if (scanState.isScanning) {
+      return { alreadyRunning: true, count: scanState.lastScanCount ?? 0, durationMs: scanState.lastScanDurationMs ?? 0 };
+    }
+    scanState.isScanning = true;
+    scanState.lastScanError = null;
+    const startTime = Date.now();
+    try {
+      const scanned = scanner.scanAll();
+      const duration = Date.now() - startTime;
+      scanState.lastScanAt = new Date().toISOString();
+      scanState.lastScanDurationMs = duration;
+      scanState.lastScanCount = scanned.length;
+      return { alreadyRunning: false, count: scanned.length, durationMs: duration };
+    } catch (e) {
+      scanState.lastScanError = e.message;
+      throw e;
+    } finally {
+      scanState.isScanning = false;
+    }
+  }
+
   const server = http.createServer(async (req, res) => {
     try {
       if (!resolvedDeps) {
@@ -241,12 +287,15 @@ export function createServer(deps = {}) {
       if (pathname === '/api/projects/register' && method === 'POST') {
         try {
           const body = await parseJsonBody(req);
-          if (!body.path) {
+          if (!body.path || typeof body.path !== 'string') {
             return sendJson(res, 400, { error: 'Campo path é obrigatório' });
           }
           const resolvedPath = path.resolve(body.path);
-          if (!fs.existsSync(resolvedPath)) {
-            return sendJson(res, 400, { error: `Caminho '${resolvedPath}' não existe no disco.` });
+          if (!isPathWithinAllowedRoots(resolvedPath, allowedRoots)) {
+            return sendJson(res, 403, { error: `Caminho '${resolvedPath}' fora das raízes autorizadas.` });
+          }
+          if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isDirectory()) {
+            return sendJson(res, 400, { error: `Diretório '${resolvedPath}' não existe no disco.` });
           }
           const label = body.label || path.basename(resolvedPath);
           db.addMonitoredPath(resolvedPath, label);
@@ -259,16 +308,28 @@ export function createServer(deps = {}) {
       }
 
       // 7. Disparar Varredura Manual
-      if (pathname === '/api/scan' && method === 'POST') {
+      if ((pathname === '/api/scan' || pathname === '/api/rescan') && method === 'POST') {
         try {
-          const startTime = Date.now();
-          const scanned = scanner.scanAll();
-          const duration = Date.now() - startTime;
+          const result = runScan(scanner);
           const kpis = db.getKpis();
-          return sendJson(res, 200, { success: true, count: scanned.length, durationMs: duration, kpis });
+          return sendJson(res, 200, { success: true, ...result, kpis, scanState });
         } catch (e) {
           return sendJson(res, 500, { error: e.message });
         }
+      }
+
+      // 7b. Status da varredura e servidor
+      if (pathname === '/api/status' && method === 'GET') {
+        return sendJson(res, 200, {
+          ...scanState,
+          autoScanIntervalMs: AUTO_SCAN_INTERVAL_MS
+        });
+      }
+
+      // 7c. Snapshots históricos diários
+      if (pathname === '/api/snapshots' && method === 'GET') {
+        const limit = Math.min(90, Math.max(1, parseInt(parsedUrl.searchParams.get('limit') || '30', 10) || 30));
+        return sendJson(res, 200, db.getSnapshots(limit));
       }
 
       // 8. Lista de Ações do Alexandre
@@ -293,6 +354,11 @@ export function createServer(deps = {}) {
           'Access-Control-Allow-Origin': '*'
         });
         return res.end(doc);
+      }
+
+      // Qualquer outra rota /api/* inexistente retorna 404 JSON (nunca index.html)
+      if (pathname.startsWith('/api/')) {
+        return sendJson(res, 404, { error: `Endpoint não encontrado: ${method} ${pathname}` });
       }
 
       // --- ARQUIVOS ESTÁTICOS (FRONTEND) ---
@@ -339,6 +405,12 @@ export function createServer(deps = {}) {
     }
   });
 
+  server.runScan = async () => {
+    if (!resolvedDeps) resolvedDeps = await getDefaultDeps();
+    return runScan(resolvedDeps.scanner);
+  };
+  server.getScanState = () => ({ ...scanState });
+
   return server;
 }
 
@@ -354,5 +426,17 @@ if (process.argv[1] && process.argv[1].endsWith('server.js')) {
       lan.networkUrls.forEach(n => console.log(`  Rede:    ${n.url} (${n.interface})`));
     }
     console.log(`=======================================================`);
+
+    // Auto-scan em background (inicializacao + intervalo periodico)
+    setTimeout(() => {
+      server.runScan().catch(e => console.error('Erro no auto-scan inicial:', e.message));
+    }, 500);
+
+    if (AUTO_SCAN_INTERVAL_MS > 0) {
+      const timer = setInterval(() => {
+        server.runScan().catch(e => console.error('Erro no auto-scan periodico:', e.message));
+      }, AUTO_SCAN_INTERVAL_MS);
+      timer.unref();
+    }
   });
 }

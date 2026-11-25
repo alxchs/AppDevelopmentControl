@@ -151,6 +151,12 @@ export class ProjectScanner {
       if (info) results.push(info);
     }
 
+    try {
+      this.db.saveDailySnapshot(this.nowIso());
+    } catch (e) {
+      console.error('Erro ao salvar snapshot diario:', e.message);
+    }
+
     return results;
   }
 
@@ -185,13 +191,19 @@ export class ProjectScanner {
           lastModified = stat.mtime.toISOString();
         } catch (e) {}
 
+        const wtTree = fs.existsSync(path.join(wt.path, '.git'))
+          ? this.checkWorkingTreeStatus(wt.path)
+          : { is_clean: true, uncommitted_count: 0 };
+
         return {
           name: wt.name,
           path: wt.path,
           branch,
+          uncommitted_count: wtTree.uncommitted_count || 0,
           last_modified: lastModified
         };
       });
+      const worktreeDirtyCount = enrichedWorktrees.reduce((sum, w) => sum + (w.uncommitted_count || 0), 0);
 
       // Detecção de Stack Tecnológica
       const stack = this.detectStack(projectPath);
@@ -219,10 +231,8 @@ export class ProjectScanner {
       }
 
       // Extrair métricas Git a partir do projeto principal (evita duplicação!)
-      const gitMetrics = hasGit ? this.extractGitMetrics(projectPath) : this.extractFsMetrics(projectPath);
-
-      // Commits Recentes (últimos 5)
       const recentCommits = hasGit ? this.extractRecentCommits(projectPath, 5) : [];
+      const gitMetrics = hasGit ? this.extractGitMetrics(projectPath, recentCommits) : this.extractFsMetrics(projectPath);
 
       // Status da Árvore de Trabalho (Clean vs Dirty)
       const treeStatus = hasGit ? this.checkWorkingTreeStatus(projectPath) : { is_clean: true, uncommitted_count: 0 };
@@ -254,6 +264,10 @@ export class ProjectScanner {
       const donePoints = specsMetrics?.finalizadas?.pontos !== undefined ? specsMetrics.finalizadas.pontos : specs.filter(s => s.status === 'done').reduce((acc, s) => acc + (s.weight || 1), 0);
       const pendingPoints = Math.max(0, totalPoints - donePoints);
 
+      const prodMetrics = accepted ? (production.prod.metrics || computeProductionMetrics(production.prod.control, production.prod.events, production.prod.baseline, { now: this.nowIso(), issues: production.prod.issues, eventStats: production.prod.eventStats })) : null;
+      if (accepted) production.prod.metrics = prodMetrics;
+      const divergenceAlerts = this.detectDivergences(projectPath, agentContext, production, treeStatus, enrichedWorktrees, gitMetrics, hasGit);
+
       const projectRecord = {
         name,
         path: projectPath,
@@ -281,6 +295,8 @@ export class ProjectScanner {
         last_decision: agentContext.last_decision || null,
         worktree_clean: treeStatus.is_clean ? 1 : 0,
         uncommitted_count: treeStatus.uncommitted_count,
+        worktree_dirty_count: worktreeDirtyCount,
+        divergence_alerts: divergenceAlerts,
         doc_health: docHealth,
         commands,
         total_specs: totalSpecs,
@@ -292,6 +308,9 @@ export class ProjectScanner {
         specs_summary_json: specsMetrics ? JSON.stringify(specsMetrics) : null,
         alexandre_pending_count: alexandreActions.length,
         worktrees_count: enrichedWorktrees.length,
+        prod_status: production.prod.status,
+        prod_blocked_points: prodMetrics?.blockers?.blocked_points || 0,
+        prod_awaiting_alexandre_points: prodMetrics?.blockers?.awaiting_alexandre_points || 0,
         is_custom: isCustom
       };
 
@@ -352,7 +371,7 @@ export class ProjectScanner {
   persistProduction(name, production, specsSource) {
     try {
       const { prod, sourceWorktree } = production;
-      if (prod.status === 'valid' || prod.status === 'valid_with_alerts') {
+      if ((prod.status === 'valid' || prod.status === 'valid_with_alerts') && !prod.metrics) {
         prod.metrics = computeProductionMetrics(prod.control, prod.events, prod.baseline, { now: this.nowIso(), issues: prod.issues, eventStats: prod.eventStats });
       }
       this.db.replaceProductionImport(name, prod, { sourceKind: sourceWorktree ? 'production_v2_worktree' : 'production_v2' });
@@ -360,6 +379,57 @@ export class ProjectScanner {
     } catch (e) {
       console.error(`Erro ao gravar producao v2 de ${name}:`, e.message);
     }
+  }
+
+  detectDivergences(projectPath, agentContext, production, treeStatus, enrichedWorktrees, gitMetrics, hasGit) {
+    const alerts = [];
+    const prod = production?.prod;
+
+    if (prod && prod.status === 'rejected') {
+      alerts.push({
+        code: 'PROD_REJECTED',
+        severity: 'error',
+        message: 'Controle docs/production v2 rejeitado por erro de schema'
+      });
+    }
+
+    if (prod && prod.declared_updated_at && gitMetrics?.last_commit_date) {
+      const declaredMs = Date.parse(prod.declared_updated_at);
+      const commitMs = Date.parse(gitMetrics.last_commit_date);
+      if (Number.isFinite(declaredMs) && Number.isFinite(commitMs) && (commitMs - declaredMs) > 3 * 86400 * 1000) {
+        alerts.push({
+          code: 'STALE_CONTROL',
+          severity: 'warning',
+          message: 'Commits recentes posteriores à última atualização do production-control.json'
+        });
+      }
+    }
+
+    const wtDirty = enrichedWorktrees.reduce((s, w) => s + (w.uncommitted_count || 0), 0);
+    if (wtDirty > 0 && treeStatus.is_clean) {
+      alerts.push({
+        code: 'WORKTREE_DIRTY',
+        severity: 'info',
+        message: `Principal limpo, mas há ${wtDirty} alteração(ões) não commitada(s) em worktree`
+      });
+    }
+
+    if (hasGit && agentContext?.current_phase) {
+      const branchMatch = agentContext.current_phase.match(/branch\s+([a-zA-Z0-9_.\-\/]+)/i);
+      if (branchMatch) {
+        const citedBranch = branchMatch[1];
+        const exists = this.safeGit(['branch', '--list', citedBranch], projectPath);
+        if (!exists) {
+          alerts.push({
+            code: 'STALE_CONTEXT_BRANCH',
+            severity: 'warning',
+            message: `Contexto cita branch '${citedBranch}' que não existe mais localmente`
+          });
+        }
+      }
+    }
+
+    return alerts;
   }
 
   computePipelineStage(p) {
@@ -693,7 +763,7 @@ export class ProjectScanner {
     }
   }
 
-  extractGitMetrics(projectPath) {
+  extractGitMetrics(projectPath, recentCommits = []) {
     const metrics = {
       created_local: null,
       created_github: null,
@@ -704,75 +774,45 @@ export class ProjectScanner {
       changes_total: 0,
       max_inactive_days: 0,
       days_since_last_change: 0,
-      last_commit_date: null,
-      last_commit_message: null,
+      last_commit_date: recentCommits[0]?.date_iso || null,
+      last_commit_message: recentCommits[0]?.message || null,
       last_tag: null,
       last_tag_date: null,
-      last_agent: null
+      last_agent: recentCommits[0]?.agent || null
     };
 
     try {
-      try {
-        const remote = this.safeGit(['config', '--get', 'remote.origin.url'], projectPath);
-        if (remote) metrics.github_url = remote;
-      } catch (e) {}
+      const remote = this.safeGit(['config', '--get', 'remote.origin.url'], projectPath);
+      if (remote) metrics.github_url = remote;
 
-      // Tags
-      try {
-        const tag = this.safeGit(['describe', '--tags', '--abbrev=0'], projectPath);
-        if (tag) {
-          metrics.last_tag = tag;
-          try {
-            const tagDate = this.safeGit(['log', '-1', '--format=%aI', tag], projectPath);
-            if (tagDate) metrics.last_tag_date = tagDate;
-          } catch (e) {}
-        }
-      } catch (e) {
-        try {
-          const tagListOut = this.safeGit(['tag', '--sort=-creatordate'], projectPath);
-          const tagList = tagListOut ? tagListOut.split('\n').filter(t => t.trim()) : [];
-          if (tagList.length > 0) {
-            metrics.last_tag = tagList[0].trim();
-          }
-        } catch (err) {}
+      const tag = this.safeGit(['describe', '--tags', '--abbrev=0'], projectPath)
+        || (this.safeGit(['tag', '--sort=-creatordate'], projectPath).split('\n')[0] || '').trim();
+      if (tag) {
+        metrics.last_tag = tag;
+        const tagDate = this.safeGit(['log', '-1', '--format=%aI', tag], projectPath);
+        if (tagDate) metrics.last_tag_date = tagDate;
       }
 
-      // Último agente / autor relevante
-      try {
-        const recentAuthors = this.safeGit(['log', '-n', '5', '--format=%an %s'], projectPath);
-        if (/claude/i.test(recentAuthors)) {
-          metrics.last_agent = 'Claude';
-        } else if (/antigravity|agy/i.test(recentAuthors)) {
-          metrics.last_agent = 'AGY';
-        } else if (/alexandre|alxch/i.test(recentAuthors)) {
-          metrics.last_agent = 'Alexandre';
-        } else {
-          metrics.last_agent = 'Alexandre';
-        }
-      } catch (e) {}
+      if (!metrics.last_agent && recentCommits.length > 0) {
+        metrics.last_agent = recentCommits[0].agent || 'Alexandre';
+      }
 
-      try {
-        const first = this.safeGit(['log', '--reverse', '--format=%aI', '-n', '1'], projectPath);
-        if (first) metrics.created_local = first;
-      } catch (e) {}
+      const first = this.safeGit(['log', '--reverse', '--format=%aI', '-n', '1'], projectPath);
+      if (first) metrics.created_local = first;
 
       if (metrics.github_url) {
-        try {
-          const remoteFirst = this.safeGit(['log', '--reverse', '--format=%aI', 'origin/main', '-n', '1'], projectPath);
-          if (remoteFirst) metrics.created_github = remoteFirst;
-        } catch (e) {
-          metrics.created_github = metrics.created_local;
-        }
+        const remoteFirst = this.safeGit(['log', '--reverse', '--format=%aI', 'origin/main', '-n', '1'], projectPath);
+        metrics.created_github = remoteFirst || metrics.created_local;
       }
 
-      try {
+      if (!metrics.last_commit_date) {
         const lastOut = this.safeGit(['log', '-n', '1', '--format=%aI%x1f%s'], projectPath);
         if (lastOut) {
           const parts = lastOut.split('\x1f');
           metrics.last_commit_date = parts[0] || null;
           metrics.last_commit_message = parts[1] || null;
         }
-      } catch (e) {}
+      }
 
       try {
         const allTimestampsStr = this.safeGit(['log', '--format=%at'], projectPath);
@@ -851,90 +891,6 @@ export class ProjectScanner {
         last_commit_message: null
       };
     }
-  }
-
-  parseSpecsIndex(projectPath) {
-    const specsMasterCandidates = ['docs/specs/SPECS.md', 'SPECS.md', 'docs/SPECS.md'];
-    for (const relSpecs of specsMasterCandidates) {
-      const specsMasterPath = path.join(projectPath, relSpecs);
-      if (fs.existsSync(specsMasterPath)) {
-        try {
-          const masterContent = fs.readFileSync(specsMasterPath, 'utf8');
-          let metrics = null;
-          const jsonMatch = masterContent.match(/```json\s*(\{[\s\S]*?\})\s*```/);
-          if (jsonMatch) {
-            try {
-              const parsed = JSON.parse(jsonMatch[1]);
-              metrics = parsed.metricas || parsed;
-            } catch (e) {}
-          }
-
-          const specs = [];
-          const tableLines = masterContent.split('\n');
-          for (const line of tableLines) {
-            if (line.includes('|')) {
-              const cols = line.split('|').map(c => c.trim()).filter(c => c !== '');
-              if (cols.length >= 4) {
-                const idRaw = cols[0].replace(/[*_`]/g, '').trim();
-                if (/^(ID|#|Spec|Código|---|:---:)/i.test(idRaw)) continue;
-
-                const nameRaw = cols[1].replace(/[*_`]/g, '').trim();
-                const weightRaw = parseInt(cols[2].replace(/[^\d]/g, ''), 10);
-                const weight = (!isNaN(weightRaw) && weightRaw > 0) ? weightRaw : 1;
-                const categoryRaw = cols[3].toLowerCase();
-
-                let status = 'pending';
-                let category = 'fila';
-                if (/finalizad[ao]|concluíd[ao]|done|⚪|✅/i.test(categoryRaw)) {
-                  status = 'done';
-                  category = 'finalizada';
-                } else if (/andamento|wip|progress|🔴|🟦/i.test(categoryRaw)) {
-                  status = 'in_progress';
-                  category = 'em_andamento';
-                } else if (/dependendo|alexandre|mim|🟡|⏳/i.test(categoryRaw)) {
-                  status = 'awaiting_alexandre';
-                  category = 'dependendo_alexandre';
-                } else if (/impedid[ao]|block|bloquead[ao]|⛔/i.test(categoryRaw)) {
-                  status = 'blocked';
-                  category = 'impedida';
-                } else if (/inválid[ao]|descartad[ao]|cancelad[ao]|➖/i.test(categoryRaw)) {
-                  status = 'invalid';
-                  category = 'invalida';
-                }
-
-                specs.push({
-                  id: idRaw,
-                  name: nameRaw,
-                  weight,
-                  category,
-                  status
-                });
-              }
-            }
-          }
-
-          const total_specs = metrics?.total_specs || specs.length;
-          const total_points = metrics?.total_pontos || specs.reduce((acc, s) => acc + (s.weight || 1), 0);
-          const done_specs = metrics?.finalizadas?.qtd || specs.filter(s => s.status === 'done').length;
-          const done_points = metrics?.finalizadas?.pontos || specs.filter(s => s.status === 'done').reduce((acc, s) => acc + (s.weight || 1), 0);
-          const pending_specs = Math.max(0, total_specs - done_specs);
-          const pending_points = Math.max(0, total_points - done_points);
-
-          return {
-            file_path: relSpecs,
-            metrics,
-            specs,
-            total_specs,
-            total_points,
-            done_specs,
-            done_points,
-            pending_specs,
-            pending_points
-          };
-        } catch (e) {}
-      }
-    }
-    return null;
   }
 
   consolidateSpecsAndActions(pathsToScan, projectName) {
@@ -1069,11 +1025,8 @@ export class ProjectScanner {
                   specWeight = parseInt(pesoMatch[1], 10) || 1;
                 }
 
-                // Checa se já foi formalmente aprovada
+                // Spec aprovada no cabeçalho significa pronta para iniciar (nao concluida)
                 isApprovedInHeader = /Estado:\s*\*\*APROVAD[AO]\*\*|Status:\s*APROVAD[AO]|✅/i.test(specContent);
-                if (isApprovedInHeader) {
-                  status = 'done';
-                }
 
                 // Checa mapeamento em plano/STATUS.md
                 const folderShort = specFolder.split('-')[0].toLowerCase();
@@ -1112,11 +1065,9 @@ export class ProjectScanner {
                 pendingTasks = pendingBoxes.length;
                 completedTasks = totalTasks - pendingTasks;
 
-                // Se houver caixas de tarefa, elas definem o status; senão preserva status de aprovação
+                // Se houver caixas de tarefa, elas definem o status; sem tasks, spec aprovada permanece pendente
                 if (totalTasks > 0) {
                   status = pendingTasks === 0 ? 'done' : 'pending';
-                } else if (isApprovedInHeader) {
-                  status = 'done';
                 }
 
                 const taskLines = tasksContent.split('\n');

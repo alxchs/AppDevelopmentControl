@@ -1,11 +1,13 @@
-// AppDevelopmentControl - Executive Frontend Logic (v2.0 Deep Intelligence)
+// AppDevelopmentControl - Executive Frontend Logic (Modular & Offline)
+import { showToast } from './js/toast.js';
+import { api } from './js/api.js';
 
 let allProjects = [];
 let allAlexandreActions = [];
 let kpiData = null;
 let currentFilter = 'all';
-let currentSort = 'activity';
-let currentViewMode = 'cards'; // 'cards' ou 'table'
+let currentSort = 'priority';
+let currentViewMode = 'cards'; // 'cards', 'pipeline' ou 'table'
 let activityChart = null;
 let specsChart = null;
 let selectedProject = null;
@@ -30,8 +32,28 @@ function setupEventListeners() {
   document.getElementById('btn-copy-lan').addEventListener('click', () => {
     const text = document.getElementById('lan-primary-url').innerText;
     navigator.clipboard.writeText(text).then(() => {
-      alert(`Link copiado para a área de transferência: ${text}`);
+      showToast(`Link LAN copiado: ${text}`, 'success');
+    }).catch(() => {
+      showToast(`Link LAN: ${text}`, 'info');
     });
+  });
+
+  // Event delegation para acoes em cards, tabela, spotlight e painel Alexandre
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const projectName = btn.dataset.project;
+    if (action === 'open-modal' && projectName) {
+      openProjectModal(projectName);
+    } else if (action === 'focus-spotlight' && projectName) {
+      setSpotlightProject(projectName);
+      if (btn.dataset.scrollTop === 'true') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } else if (action === 'copy-cmd' && btn.dataset.cmd) {
+      copyCommandToClipboard(btn.dataset.cmd);
+    }
   });
 
   // Busca Inteligente
@@ -195,18 +217,21 @@ function switchModalTab(tabId) {
 // Carregar Dados da API
 async function loadAllData() {
   try {
-    const [lanRes, kpisRes, projectsRes, actionsRes] = await Promise.all([
-      fetch('/api/lan-info').then(r => r.json()).catch(() => null),
-      fetch('/api/kpis').then(r => r.json()).catch(() => null),
-      fetch('/api/projects').then(r => r.json()).catch(() => []),
-      fetch('/api/alexandre-actions').then(r => r.json()).catch(() => [])
+    const [lanRes, kpisRes, projectsRes, actionsRes, statusRes, snapshotsRes] = await Promise.all([
+      api.getLanInfo(),
+      api.getKpis(),
+      api.getProjects(),
+      api.getAlexandreActions(),
+      api.getStatus(),
+      api.getSnapshots(14)
     ]);
 
     if (lanRes) renderLanInfo(lanRes);
+    if (statusRes) renderScanStatus(statusRes);
     if (kpisRes) {
       kpiData = kpisRes;
       renderKpis(kpisRes);
-      renderCharts(kpisRes, projectsRes);
+      renderCharts(kpisRes, projectsRes, snapshotsRes);
     }
     allProjects = projectsRes || [];
     allAlexandreActions = actionsRes || [];
@@ -216,7 +241,25 @@ async function loadAllData() {
     applyFilterAndRender();
   } catch (err) {
     console.error('Erro ao carregar dados:', err);
+    showToast(`Erro ao carregar dados: ${err.message}`, 'warning');
   }
+}
+
+function renderScanStatus(status) {
+  const pill = document.getElementById('scan-status-pill');
+  if (!pill) return;
+  if (status.isScanning) {
+    pill.textContent = 'Sincronizando...';
+    pill.className = 'hidden sm:inline-flex items-center gap-1 text-[11px] text-indigo-300 bg-indigo-950/60 border border-indigo-500/30 px-2 py-0.5 rounded-full';
+    return;
+  }
+  if (!status.lastScanAt) {
+    pill.textContent = 'Cache local';
+    return;
+  }
+  const mins = Math.max(0, Math.floor((Date.now() - Date.parse(status.lastScanAt)) / 60000));
+  const dur = status.lastScanDurationMs ? ` (${(status.lastScanDurationMs / 1000).toFixed(1)}s)` : '';
+  pill.textContent = mins === 0 ? `Atualizado agora${dur}` : `Atualizado há ${mins}m${dur}`;
 }
 
 function renderLanInfo(lan) {
@@ -434,7 +477,19 @@ function applyFilterAndRender() {
   }
 
   // 3. Ordenação
-  if (currentSort === 'activity') {
+  const priorityScore = (p) => {
+    let s = 0;
+    s += (p.alexandre_pending_count || 0) * 1000;
+    if (p.production && p.production.status === 'rejected') s += 500;
+    s += ((p.divergence_alerts && p.divergence_alerts.length) || 0) * 150;
+    s += ((p.uncommitted_count || 0) + (p.worktree_dirty_count || 0)) * 20;
+    s += (p.changes_7d || 0) * 10 + (p.changes_30d || 0);
+    return s;
+  };
+
+  if (currentSort === 'priority') {
+    filtered.sort((a, b) => priorityScore(b) - priorityScore(a) || a.name.localeCompare(b.name));
+  } else if (currentSort === 'activity') {
     filtered.sort((a, b) => b.changes_30d - a.changes_30d || b.changes_7d - a.changes_7d);
   } else if (currentSort === 'sdd_score') {
     filtered.sort((a, b) => (b.sdd_score || 0) - (a.sdd_score || 0));
@@ -568,11 +623,26 @@ function renderProjectsGrid(projects) {
       </span>
     ` : '';
 
-    // Status da árvore de trabalho
+    // Status da árvore de trabalho e worktrees sujas
     const treeBadge = p.worktree_clean === 0 ? `
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30" title="${p.uncommitted_count} arquivos pendentes de commit">
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30" title="${p.uncommitted_count} arquivos pendentes de commit no principal">
         <i data-lucide="alert-circle" class="w-3 h-3 text-amber-400"></i>
         <span>${p.uncommitted_count} uncommitted</span>
+      </span>
+    ` : '';
+
+    const wtDirtyBadge = (p.worktree_dirty_count || 0) > 0 ? `
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30" title="${p.worktree_dirty_count} arquivos não commitados em worktrees vinculadas">
+        <i data-lucide="git-branch" class="w-3 h-3 text-amber-400"></i>
+        <span>+${p.worktree_dirty_count} wt dirty</span>
+      </span>
+    ` : '';
+
+    const divCount = (p.divergence_alerts && p.divergence_alerts.length) || 0;
+    const divergenceBadge = divCount > 0 ? `
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/40" title="${escapeHtml(p.divergence_alerts.map(d => d.message).join(' | '))}">
+        <i data-lucide="alert-triangle" class="w-3 h-3 text-amber-400"></i>
+        <span>${divCount} divergência${divCount > 1 ? 's' : ''}</span>
       </span>
     ` : '';
 
@@ -635,6 +705,8 @@ function renderProjectsGrid(projects) {
               ${stackBadge}
               ${worktreeBadge}
               ${treeBadge}
+              ${wtDirtyBadge}
+              ${divergenceBadge}
               ${prodSourceBadge(p.production)}
               ${prodAlertCounts(p.production)}
             </div>
@@ -669,11 +741,7 @@ function renderProjectsGrid(projects) {
           </div>
 
           <!-- Métricas de Alterações -->
-          <div class="grid grid-cols-4 gap-1.5 mt-3 text-center">
-            <div class="bg-slate-850 p-2 rounded-lg border border-slate-800">
-              <span class="text-[10px] text-slate-500 block">24h</span>
-              <span class="text-xs font-bold ${p.changes_24h > 0 ? 'text-emerald-400' : 'text-slate-400'}">${p.changes_24h}</span>
-            </div>
+          <div class="grid grid-cols-3 gap-1.5 mt-3 text-center">
             <div class="bg-slate-850 p-2 rounded-lg border border-slate-800">
               <span class="text-[10px] text-slate-500 block">7 dias</span>
               <span class="text-xs font-bold ${p.changes_7d > 0 ? 'text-indigo-400' : 'text-slate-400'}">${p.changes_7d}</span>
@@ -696,11 +764,11 @@ function renderProjectsGrid(projects) {
         <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
           <span class="text-[10px] text-slate-500 truncate max-w-[150px]" title="${escapeHtml(p.path)}">${escapeHtml(p.path)}</span>
           <div class="flex items-center gap-2">
-            <button onclick="setSpotlightProject('${escapeHtml(p.name)}'); window.scrollTo({top: 0, behavior: 'smooth'});" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1" title="Focar no Spotlight">
+            <button data-action="focus-spotlight" data-scroll-top="true" data-project="${escapeHtml(p.name)}" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1" title="Focar no Spotlight">
               <i data-lucide="compass" class="w-3.5 h-3.5"></i>
               <span>Focar</span>
             </button>
-            <button onclick="openProjectModal('${escapeHtml(p.name)}')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 hover:border-indigo-500/40 transition">
+            <button data-action="open-modal" data-project="${escapeHtml(p.name)}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 hover:border-indigo-500/40 transition">
               Detalhes
             </button>
           </div>
@@ -912,7 +980,7 @@ async function openProjectModal(projectName) {
     modal.classList.remove('hidden');
     lucide.createIcons();
   } catch (e) {
-    alert(`Erro ao abrir detalhes: ${e.message}`);
+    showToast(`Erro ao abrir detalhes: ${e.message}`, 'warning');
   }
 }
 
@@ -1078,29 +1146,25 @@ async function handleSavePurpose() {
   if (!selectedProject) return;
   const purpose = document.getElementById('modal-purpose-input').value;
   try {
-    const res = await fetch(`/api/projects/${encodeURIComponent(selectedProject)}/purpose`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose })
-    });
-    if (!res.ok) throw new Error('Falha ao salvar propósito');
-    alert('Propósito atualizado e fixado com sucesso!');
+    await api.savePurpose(selectedProject, purpose);
+    showToast('Propósito atualizado e fixado com sucesso!', 'success');
     await loadAllData();
   } catch (e) {
-    alert(`Erro: ${e.message}`);
+    showToast(`Erro ao salvar propósito: ${e.message}`, 'warning');
   }
 }
 
-// Sincronizar (Rescan)
+// Sincronizar (Scan real em /api/scan)
 async function handleRescan() {
   const icon = document.getElementById('rescan-icon');
   icon.classList.add('animate-spin');
   try {
-    const res = await fetch('/api/rescan', { method: 'POST' });
-    if (!res.ok) throw new Error('Falha na sincronização');
+    const result = await api.scanAll();
+    const secs = result.durationMs ? ` em ${(result.durationMs / 1000).toFixed(1)}s` : '';
+    showToast(`Sincronização concluída: ${result.count} projetos${secs}.`, 'success');
     await loadAllData();
   } catch (e) {
-    alert(`Erro na sincronização: ${e.message}`);
+    showToast(`Erro na sincronização: ${e.message}`, 'warning');
   } finally {
     icon.classList.remove('animate-spin');
   }
@@ -1253,11 +1317,15 @@ function setSpotlightProject(projectName) {
 
 function copyCommandToClipboard(cmd) {
   navigator.clipboard.writeText(cmd).then(() => {
-    alert(`Comando copiado para a área de transferência:\n\n${cmd}`);
+    showToast(`Comando copiado: ${cmd}`, 'success');
   }).catch(() => {
-    prompt('Copie o comando abaixo:', cmd);
+    showToast(`Copie manualmente: ${cmd}`, 'info');
   });
 }
+
+window.openProjectModal = openProjectModal;
+window.setSpotlightProject = setSpotlightProject;
+window.copyCommandToClipboard = copyCommandToClipboard;
 
 function renderSpotlightPanel(p) {
   const panel = document.getElementById('project-spotlight-panel');
@@ -1383,6 +1451,16 @@ function renderSpotlightPanel(p) {
     `;
   }
 
+  // Divergencias detectadas (Docs vs Git / Controle v2)
+  const divergences = p.divergence_alerts || [];
+  const divergenceBanner = divergences.length > 0 ? `
+    <div class="bg-amber-950/30 border border-amber-500/35 rounded-xl p-2.5 flex flex-wrap items-center gap-2 text-xs text-amber-200">
+      <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 shrink-0"></i>
+      <span class="font-bold">Divergências detectadas:</span>
+      ${divergences.map(d => `<span class="px-2 py-0.5 rounded bg-slate-900/80 border border-amber-500/25 text-[11px]">${escapeHtml(d.message)}</span>`).join('')}
+    </div>
+  ` : '';
+
   panel.innerHTML = `
     <!-- Header do Spotlight -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
@@ -1411,6 +1489,7 @@ function renderSpotlightPanel(p) {
     </div>
 
     <!-- Tríade de Clareza Situacional: 3 Colunas Executivas -->
+    ${divergenceBanner}
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
       
       <!-- Coluna 1: Onde Parou -->
