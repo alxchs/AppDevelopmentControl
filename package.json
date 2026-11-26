@@ -1,13 +1,14 @@
 {
   "name": "app-development-control",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Executive Projects Dashboard & Control for Local LAN",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
     "scan": "node src/cli-scan.js",
-    "test": "node test/test_all.mjs && node test/test_production_v2.mjs && node test/test_security_resilience.mjs && node test/test_clarity_spec10.mjs"
+    "check:version": "node tools/check-version-bump.mjs",
+    "test": "node test/test_all.mjs && node test/test_production_v2.mjs && node test/test_security_resilience.mjs && node test/test_clarity_spec10.mjs && node test/test_version_spec11.mjs"
   },
   "keywords": [
     "dashboard",

@@ -1,6 +1,7 @@
 // AppDevelopmentControl - Executive Frontend Logic (Modular & Offline)
 import { showToast } from './js/toast.js';
 import { api } from './js/api.js';
+import { FRONTEND_VERSION } from './js/version.js';
 
 let allProjects = [];
 let allAlexandreActions = [];
@@ -15,6 +16,7 @@ let selectedProject = null;
 // Inicialização
 document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
+  renderVersions(null);
   await loadAllData();
   lucide.createIcons();
 });
@@ -227,6 +229,7 @@ async function loadAllData() {
     ]);
 
     if (lanRes) renderLanInfo(lanRes);
+    renderVersions(statusRes);
     if (statusRes) renderScanStatus(statusRes);
     if (kpisRes) {
       kpiData = kpisRes;
@@ -245,21 +248,44 @@ async function loadAllData() {
   }
 }
 
+function renderVersions(status) {
+  const pill = document.getElementById('version-pill');
+  if (!pill) return;
+  const be = status?.backendVersion;
+  const fe = FRONTEND_VERSION;
+  if (!be) {
+    pill.textContent = `FE v${fe}`;
+    pill.className = 'inline-flex items-center gap-1 text-[11px] font-mono text-indigo-300 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-full';
+    return;
+  }
+  const mismatch = be !== fe;
+  pill.textContent = `BE v${be} · FE v${fe}`;
+  pill.className = mismatch
+    ? 'inline-flex items-center gap-1 text-[11px] font-mono text-amber-300 bg-amber-950/50 border border-amber-500/40 px-2 py-0.5 rounded-full'
+    : 'inline-flex items-center gap-1 text-[11px] font-mono text-indigo-300 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-full';
+  pill.title = mismatch
+    ? `Versão do Backend (v${be}) difere do Frontend (v${fe}) — recarregue a página (Ctrl+F5)`
+    : `Backend v${be} e Frontend v${fe} sincronizados`;
+}
+
 function renderScanStatus(status) {
   const pill = document.getElementById('scan-status-pill');
   if (!pill) return;
   if (status.isScanning) {
     pill.textContent = 'Sincronizando...';
-    pill.className = 'hidden sm:inline-flex items-center gap-1 text-[11px] text-indigo-300 bg-indigo-950/60 border border-indigo-500/30 px-2 py-0.5 rounded-full';
+    pill.className = 'inline-flex items-center gap-1 text-[11px] text-indigo-300 bg-indigo-950/60 border border-indigo-500/30 px-2 py-0.5 rounded-full';
     return;
   }
   if (!status.lastScanAt) {
     pill.textContent = 'Cache local';
+    pill.className = 'inline-flex items-center gap-1 text-[11px] text-slate-400 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-full';
     return;
   }
-  const mins = Math.max(0, Math.floor((Date.now() - Date.parse(status.lastScanAt)) / 60000));
+  const dt = new Date(status.lastScanAt);
+  const hora = Number.isNaN(dt.getTime()) ? '' : dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dur = status.lastScanDurationMs ? ` (${(status.lastScanDurationMs / 1000).toFixed(1)}s)` : '';
-  pill.textContent = mins === 0 ? `Atualizado agora${dur}` : `Atualizado há ${mins}m${dur}`;
+  pill.textContent = hora ? `Atualizado às ${hora}${dur}` : `Atualizado${dur}`;
+  pill.className = 'inline-flex items-center gap-1 text-[11px] text-slate-300 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-full';
 }
 
 function renderLanInfo(lan) {

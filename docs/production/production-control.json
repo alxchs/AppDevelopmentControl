@@ -8,20 +8,20 @@
     "status": "active",
     "migration_status": "migrated",
     "baseline_at": "2026-11-13T10:00:00-03:00",
-    "last_updated_at": "2026-11-25T18:25:00-03:00",
+    "last_updated_at": "2026-11-26T08:35:00-03:00",
     "last_updated_by": "AGY"
   },
   "summary": {
-    "spec_count": 10,
+    "spec_count": 11,
     "task_count": null,
     "status_counts": {
       "completed": 6,
-      "in_validation": 4,
+      "in_validation": 5,
       "in_progress": 0
     },
-    "total_points": 50,
+    "total_points": 53,
     "completed_points_equivalent": 24,
-    "remaining_points": 26,
+    "remaining_points": 29,
     "original_estimate_hours": 42,
     "current_estimate_hours": 42,
     "actual_hours": null,
@@ -660,6 +660,50 @@
         "docs/specs/010-clarity-and-professionalization/spec.md",
         "docs/specs/010-clarity-and-professionalization/plan.md",
         "docs/specs/010-clarity-and-professionalization/tasks.md"
+      ],
+      "migration_status": "native_v2"
+    },
+    {
+      "id": "SPEC-0011",
+      "legacy_ids": [],
+      "title": "Versao de Backend e Frontend no cabecalho junto da hora de atualizacao e trava obrigatoria de versao/commit",
+      "type": "feature",
+      "state": "in_validation",
+      "category": "em_andamento",
+      "priority": "high",
+      "owner": "AGY",
+      "points": 3,
+      "points_confidence": "high",
+      "points_justification": "Peso 3: pequeno escopo em server.js, frontend header, script de trava e regra no AGENTS.md.",
+      "hours": {
+        "original": null,
+        "current": null,
+        "actual": null,
+        "remaining": null,
+        "actual_method": null,
+        "note": "horas nao estimadas previamente"
+      },
+      "progress": {
+        "development": 100,
+        "test_validation": 100,
+        "integration": 90,
+        "documentation": 100,
+        "overall_rule": "media simples das 4 dimensoes"
+      },
+      "progress_note": "T1-T5 implementadas (BE v1.1.0, FE v1.1.0, check-version-bump.mjs e publish.ps1). Aguardando integracao na main e publicacao.",
+      "evidence": [
+        {
+          "kind": "doc",
+          "ref": "docs/specs/011-be-fe-version-badge/spec.md",
+          "note": "especificacao aprovada pelo Alexandre"
+        }
+      ],
+      "blockers": [],
+      "dependencies": [],
+      "source_files": [
+        "docs/specs/011-be-fe-version-badge/spec.md",
+        "docs/specs/011-be-fe-version-badge/plan.md",
+        "docs/specs/011-be-fe-version-badge/tasks.md"
       ],
       "migration_status": "native_v2"
     }

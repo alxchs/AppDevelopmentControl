@@ -1,6 +1,9 @@
 # Status do Projeto — AppDevelopmentControl
 
 ## O que está PRONTO e FUNCIONANDO
+- **Versão BE/FE no Cabeçalho + Trava de Publicação (SPEC-0011)** — PRONTO PARA `/ship` (`feature/be-fe-version-badge`):
+  - `BE v1.1.0` (`package.json` via `GET /api/status`) e `FE v1.1.0` (`public/js/version.js`) exibidos no cabeçalho junto à hora exata da última atualização (`Atualizado às HH:MM:SS`), com alerta âmbar se divergirem.
+  - Trava `tools/check-version-bump.mjs` + `tools/publish.ps1` e comando `Publicar` no `AGENTS.md`: bloqueiam publicação sem bump de versão ou sem commit.
 - **Clareza Real, Limpeza e Profissionalização LAN (SPEC-0010)** — EM VALIDAÇÃO (`feature/claude-imports`, `npm test` 4/4 suítes verdes):
   - Correção `/api/rescan` → `/api/scan` e `404` JSON para qualquer `/api/*` inexistente.
   - Fim do falso `done` em `spec.md` apenas aprovada; `buildStepper` sem mangling `FSPEC-`; sinais de `production_v2` integrados no farol de saúde.

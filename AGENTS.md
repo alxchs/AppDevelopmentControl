@@ -4,7 +4,7 @@ Este arquivo é a fonte mandatória de contexto para agentes de IA (**Claude Cod
 
 ## Metodologia
 
-Leia `~/.dev-method/METODO.md` (metodologia geral do Alexandre), `AGENT_CONTEXT.md` e `docs/agents/PLAYBOOK.md` antes de agir. Regras deste projeto ficam aqui.
+Metodologia geral: `~/.dev-method/METODO.md` (a Claude já o tem carregado; a AGY lê uma vez por sessão; não releia). Leia `AGENT_CONTEXT.md` e `docs/agents/PLAYBOOK.md` antes de agir. Regras deste projeto ficam aqui.
 
 ---
 
@@ -60,6 +60,18 @@ Elevar a confiabilidade e o valor gerencial da dashboard existente, preservando 
     - Manter `docs/specs/SPECS.md` rigorosamente atualizado com todas as specs, pesos (escala Fibonacci: 1, 2, 3, 5, 8), bloco JSON e as categorias mandatórias (finalizadas, em andamento, fila, dependendo de mim, impedidas, inválidas).
     - Toda vez que uma alteração for solicitada, atualizar o arquivo de controle **antes de qualquer ação técnica** e novamente na conclusão da entrega.
     - O próprio AppDevelopmentControl deve evoluir para consumir nativamente os arquivos `docs/specs/SPECS.md` dos projetos do portfólio.
+
+12. **Versionamento BE/FE e Commit Obrigatório antes de Publicar (REGRA DURA, 26/11/2026):**
+    - **Nunca publicar com a mesma versão** se houver alteração em `src/` (incrementar `version` em `package.json`) ou em `public/` (incrementar `FRONTEND_VERSION` em `public/js/version.js`).
+    - **Sempre comitar** antes de publicar (`tools/check-version-bump.mjs --require-clean` bloqueia publicação com árvore suja ou sem bump de versão).
+
+## Comandos
+
+| Ação | Comando |
+|---|---|
+| Testar | `npm test` |
+| Verificar versão | `npm run check:version` |
+| Publicar | `pwsh -NoProfile -File tools/publish.ps1` |
 
 ---
 

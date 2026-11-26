@@ -8,6 +8,10 @@ import { generateNotebookLmDoc } from './notebooklm.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.resolve(path.join(__dirname, '..', 'public'));
+const PKG_PATH = path.resolve(path.join(__dirname, '..', 'package.json'));
+const BACKEND_VERSION = (() => {
+  try { return JSON.parse(fs.readFileSync(PKG_PATH, 'utf8')).version || '0.0.0'; } catch { return '0.0.0'; }
+})();
 const PORT = parseInt(process.env.PORT || '3333', 10);
 const DOS_DEVICE_RE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
 const DEFAULT_ALLOWED_ROOTS = (process.env.ADC_ALLOWED_ROOTS || 'c:\\desenv')
@@ -322,6 +326,7 @@ export function createServer(deps = {}) {
       if (pathname === '/api/status' && method === 'GET') {
         return sendJson(res, 200, {
           ...scanState,
+          backendVersion: BACKEND_VERSION,
           autoScanIntervalMs: AUTO_SCAN_INTERVAL_MS
         });
       }
